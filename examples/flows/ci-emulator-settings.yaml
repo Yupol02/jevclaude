@@ -1,0 +1,15 @@
+# Runs on a stock Android emulator in CI with exact selectors only, so no Jev key is needed.
+name: emulator settings (no Jev)
+app: com.android.settings
+platform: android
+fresh_start: true
+steps:
+  - launch
+  - wait_for: "Network & internet"
+  - tap: { text: "Network & internet" }
+  - wait_for: "Internet"
+  - back
+  - wait_for: "Connected devices"
+  - tap: { text: "About emulated device" }   # below the fold: the runner scrolls to find it
+  - wait_for: "Android version"
+  - back
