@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] — 2026-11-25
+
+### Fixed
+- **PDF plans on Node 20 give a clear error instead of crashing.** The PDF reader needs Node 22's global `Iterator`; on Node 20 the message now says to use `.md` / `.txt` or upgrade Node. CI found this on its Node 20 run after 0.5.0 was published.
+
 ## [0.5.0] — 2026-11-25
 
 Not yet verified: the skill + `run_plan` loop driven by Claude Code itself, media and notification checks on a real phone, and the end-call retry on a phone (see the README's status section).

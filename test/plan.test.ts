@@ -135,6 +135,10 @@ izin: arama
     writeFileSync(join(dir, "p.txt"), PLAN);
     expect(parsePlan(await readPlanText(join(dir, "p.txt"))).tests).toHaveLength(2);
     writeFileSync(join(dir, "p.pdf"), tinyPdf(["app: com.example.app", "## Smoke", "1. Open the app", '2. Check: "Home" is shown']));
+    if (Number(process.versions.node.split(".")[0]) < 22) {
+      await expect(readPlanText(join(dir, "p.pdf"))).rejects.toThrow("needs Node 22 or newer");
+      return;
+    }
     const plan = parsePlan(await readPlanText(join(dir, "p.pdf")));
     expect(plan.app).toBe("com.example.app");
     expect(plan.tests[0]!.flow.steps).toEqual(["stop", "launch", { see: "Home" }]);

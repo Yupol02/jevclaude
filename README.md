@@ -103,7 +103,7 @@ MCP tools:
 
 | Tool | What it does |
 |---|---|
-| `run_plan` | runs a plan file (`.md`, `.txt`, `.pdf`); one line per passing test, details for the rest |
+| `run_plan` | runs a plan file (`.md`, `.txt`, or `.pdf` on Node 22+); one line per passing test, details for the rest |
 | `list_devices` | Android devices and booted iOS simulators |
 | `snapshot` | the current screen as compact text (cheaper than a screenshot) |
 | `run_flow` | runs a YAML flow; returns a short report and, if it stopped, a `run_id` |

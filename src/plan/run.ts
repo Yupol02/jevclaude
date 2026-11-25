@@ -13,6 +13,12 @@ import { type Plan, parsePlan } from "./parse.js";
 /** Read a plan file: Markdown / text as UTF-8, PDF through its text layer. */
 export async function readPlanText(path: string): Promise<string> {
   if (extname(path).toLowerCase() === ".pdf") {
+    // PDF.js (inside unpdf) uses the global Iterator helpers, which Node has only from 22 on.
+    if (typeof (globalThis as { Iterator?: unknown }).Iterator === "undefined") {
+      throw new Error(
+        `reading PDF plans needs Node 22 or newer (this is Node ${process.versions.node}); save the plan as .md or .txt, or upgrade Node`,
+      );
+    }
     const { extractText, getDocumentProxy } = await import("unpdf");
     const pdf = await getDocumentProxy(new Uint8Array(await readFile(path)));
     const { text } = await extractText(pdf, { mergePages: false });
