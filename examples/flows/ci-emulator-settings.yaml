@@ -10,6 +10,6 @@ steps:
   - wait_for: "Internet"
   - back
   - wait_for: "Connected devices"
-  - tap: { text: "About emulated device" }   # below the fold: the runner scrolls to find it
+  - tap: { text: "About emulated device" } # below the fold: the runner scrolls to find it
   - wait_for: "Android version"
   - back
