@@ -1,0 +1,26 @@
+name: Bug report
+description: A flow behaved wrongly or the tool crashed
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: flow
+    attributes:
+      label: Flow (YAML) — remove credentials
+      render: yaml
+  - type: textarea
+    id: report
+    attributes:
+      label: Text report / `jevclaude doctor` output
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Platform, device / simulator, OS version, backend (adb / uia2 / wda), jevclaude version
+    validations:
+      required: true

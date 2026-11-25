@@ -1,0 +1,17 @@
+# Example: login happy path. Adjust `app` and the targets to your app.
+name: login happy path
+app: com.example.shop
+fresh_start: true
+permissions: allow
+tags: [smoke]
+steps:
+  - launch
+  - if_visible: "What's new"
+    then:
+      - tap: { text: "Close" }
+  - tap: "Log in button on the welcome screen"
+  - type: { into: "email field", text: "${TEST_EMAIL}" }
+  - type: { into: "password field", text: "${TEST_PASSWORD}", submit: true }
+  - wait_for: "Home"
+  - expect: "The user is signed in"
+  - not_see: "Invalid"

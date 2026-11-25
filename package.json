@@ -1,0 +1,61 @@
+{
+  "name": "jevclaude",
+  "version": "0.2.0",
+  "description": "Mobile app testing for Claude Code (Android + iOS): Claude plans a flow once, a local runner executes it, TypeSafe Jev makes cheap per-step decisions, a replay cache makes re-runs model-free.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "jevclaude": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "jev:smoke": "tsx bench/jev-smoke.ts",
+    "bench": "tsx bench/run.ts",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "adb",
+    "ai-agent",
+    "android",
+    "claude-code",
+    "e2e",
+    "ios",
+    "jev",
+    "maestro",
+    "mcp",
+    "mobile-testing",
+    "testing",
+    "typesafe",
+    "uiautomator2",
+    "webdriveragent"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "fast-xml-parser": "^5.12.1",
+    "yaml": "^2.9.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.9",
+    "@types/node": "^22.20.6",
+    "@vitest/coverage-v8": "3.2.7",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

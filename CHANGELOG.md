@@ -1,0 +1,32 @@
+# Changelog
+
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
+
+## [0.2.0] — 2026-11-25
+
+### Added
+- **iOS simulator support** through WebDriverAgent (`setup ios` installs a pinned prebuilt build) and `simctl`: video, screenshots, crash reports.
+- **Android UiAutomator2 backend.** Screen reads take about 0.2 s and typing supports Unicode (Turkish included). Install it with `setup android`; the `uiautomator dump` fallback remains.
+- **Replay cache** in `.jevclaude/cache/<app>.json`. Re-runs need no model calls for element picks; if a cached selector is gone, the target is re-resolved and the step is reported as `healed`.
+- **Auto-scroll** to find tap and type targets. Progress indicators are detected and waited out.
+- **Flow language v2:**
+  - `wait_for`, `if_visible` / `then` / `else`, `run:` sub-flows, `stop`, `hide_keyboard`
+  - per-step `optional` and `timeout`
+  - flow-level `env`, `tags` and `platform`
+- **Permission dialog policy** (`permissions: allow | deny | stop`).
+- **Pause and resume.** `run_flow` keeps a stopped run alive and the new MCP tool `resume_flow` (`pass | retry | fail`) continues it without relaunching.
+- **Reports:** self-contained HTML (timeline, Jev probabilities, screenshots), JUnit XML, `--trace` per-step screenshots, `--record` video.
+- **CLI:**
+  - `doctor`, `init`, `setup android|ios`, `import-maestro`, `export-maestro`
+  - multi-file and directory runs, `--devices` for parallel devices, `--tag` filtering
+- **`jevclaude.config.yaml`**, validated with zod.
+- **Project tooling:** Biome lint and format, coverage thresholds, release workflow, issue and PR templates, docs.
+
+### Changed
+- The `Device` interface became `Driver`, and parsers are platform-specific.
+- Fewer screen reads per step: snapshots are reused until an action happens.
+
+## [0.1.0] — 2026-11-25
+
+### Added
+- Android runner over adb with TypeSafe Jev decisions (element pick, step passed, error visible, risk guard), MCP server, CLI, text reports.

@@ -1,0 +1,35 @@
+# Run jevclaude flows on an Android emulator in GitHub Actions.
+# Copy to .github/workflows/ in your app's repo and add TYPESAFE_API_KEY as a secret.
+name: e2e-android
+on: [pull_request]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Build your app
+        run: ./gradlew assembleDebug
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            npx -y jevclaude setup android
+            npx -y jevclaude run flows/ --junit junit.xml --html e2e-report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: |
+            e2e-report.html
+            junit.xml
+            reports/

@@ -1,0 +1,7 @@
+[
+  {
+    "name": "settings-about",
+    "flow": "examples/flows/settings-smoke.yaml",
+    "baselinePrompt": "Using only adb shell commands (uiautomator dump, input tap/swipe, screencap) on the connected Android phone: open the Settings app, scroll to and open 'About phone', and verify a screen with phone information is shown, then go back. Finish with one line: PASSED or FAILED and why."
+  }
+]

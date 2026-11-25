@@ -1,0 +1,13 @@
+# Works on any iOS simulator: open Settings → General → About.
+name: ios settings smoke
+app: com.apple.Preferences
+platform: ios
+fresh_start: true
+steps:
+  - launch
+  - wait_for: "General"
+  - tap: { text: "General" }
+  - tap: "the About row"
+  - expect: "A screen listing information about the device, such as its name or iOS version"
+  - back
+  - see: "About"

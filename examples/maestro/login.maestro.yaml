@@ -1,0 +1,12 @@
+# A Maestro flow; convert with: jevclaude import-maestro examples/maestro/login.maestro.yaml
+appId: com.example.shop
+name: login (maestro)
+---
+- launchApp
+- tapOn:
+    id: "email"
+- inputText: "qa@example.test"
+- tapOn: "Log in"
+- assertVisible: "Home"
+- assertWithAI:
+    assertion: "The user is signed in"
