@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Releases publish through npm Trusted Publishing (OIDC); the `NPM_TOKEN` secret is no longer used.
+- GitHub Actions updated to `actions/checkout@v7` and `actions/setup-node@v7`; CI also tests Node 24.
+
 ## [0.2.0] — 2026-11-25
 
 ### Added

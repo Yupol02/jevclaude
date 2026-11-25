@@ -6,8 +6,8 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 22 }
       - name: Enable KVM
         run: |
@@ -25,7 +25,7 @@ jobs:
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             npx -y jevclaude setup android
             npx -y jevclaude run flows/ --junit junit.xml --html e2e-report.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-report
