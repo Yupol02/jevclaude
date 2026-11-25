@@ -1,8 +1,8 @@
 import type { ChildProcess } from "node:child_process";
-import type { UiSnapshot } from "../../core/uitree.js";
+import type { UiElement, UiSnapshot } from "../../core/uitree.js";
 import { type Driver, sleep } from "../types.js";
 import { Adb, findCrashes } from "./adb.js";
-import { Uia2Client } from "./uia2.js";
+import { UIA2_SERVER_PKG, UIA2_TEST_PKG, Uia2Client } from "./uia2.js";
 import { parseAndroidXml } from "./xml.js";
 
 const KEYS: Record<string, string> = {
@@ -45,6 +45,8 @@ export class AndroidDriver implements Driver {
         throw new Error("UiAutomator2 server is not installed; run `jevclaude setup android`");
       }
     }
+    // On the adb path, make sure no UiAutomator2 server from an earlier run holds the UI automation connection.
+    if (!d.uia2) await stopUia2Server(d.adb);
     return d;
   }
 
@@ -69,7 +71,14 @@ export class AndroidDriver implements Driver {
         /* server may have died (e.g. app restart); fall back for this read */
       }
     }
-    return parseAndroidXml(await this.adb.dumpUi());
+    try {
+      return parseAndroidXml(await this.adb.dumpUi());
+    } catch (e) {
+      // A UiAutomator2 server left running by an earlier session blocks `uiautomator dump`.
+      if (this.uia2) throw e;
+      await stopUia2Server(this.adb);
+      return parseAndroidXml(await this.adb.dumpUi());
+    }
   }
 
   async tap(x: number, y: number) {
@@ -80,11 +89,29 @@ export class AndroidDriver implements Driver {
     await this.adb.swipe(x1, y1, x2, y2, durationMs);
   }
 
-  async typeText(text: string) {
-    if (this.uia2) return this.uia2.keys(text);
-    if (/[^\x20-\x7e]/.test(text)) {
-      throw new Error("Non-ASCII text needs the UiAutomator2 backend: run `jevclaude setup android`");
+  async typeText(text: string, target?: UiElement) {
+    const ascii = !/[^\x20-\x7e]/.test(text);
+    if (this.uia2) {
+      const errors: string[] = [];
+      // 1. Set the tapped field's text directly (Compose fields often report no focus).
+      if (target) {
+        try {
+          return await this.uia2.setTextAt(target.bounds, text);
+        } catch (e) {
+          errors.push((e as Error).message);
+        }
+      }
+      // 2. Type into whatever has focus.
+      try {
+        return await this.uia2.keys(text);
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
+      // 3. Plain adb input as a last resort (ASCII only).
+      if (ascii) return this.adb.typeText(text);
+      throw new Error(`could not type into the field: ${errors.map((m) => m.slice(0, 120)).join(" | ")}`);
     }
+    if (!ascii) throw new Error("Non-ASCII text needs the UiAutomator2 backend: run `jevclaude setup android`");
     await this.adb.typeText(text);
   }
 
@@ -97,9 +124,13 @@ export class AndroidDriver implements Driver {
     await this.adb.back();
   }
 
-  async hideKeyboard() {
+  async keyboardShown() {
     const out = await this.adb.shell(["dumpsys", "input_method"]).catch(() => "");
-    if (/mInputShown=true|isInputViewShown=true/.test(out)) await this.adb.back();
+    return /mInputShown=true|isInputViewShown=true/.test(out);
+  }
+
+  async hideKeyboard() {
+    if (await this.keyboardShown()) await this.adb.back();
   }
 
   async launch(app: string) {
@@ -156,4 +187,10 @@ export class AndroidDriver implements Driver {
   async close() {
     await this.uia2?.stop();
   }
+}
+
+/** Stop a UiAutomator2 server instrumentation (it blocks `uiautomator dump` while running). */
+async function stopUia2Server(adb: Adb): Promise<void> {
+  await adb.forceStop(UIA2_TEST_PKG).catch(() => {});
+  await adb.forceStop(UIA2_SERVER_PKG).catch(() => {});
 }

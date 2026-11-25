@@ -14,6 +14,9 @@ Claude test akışını bir kez yazar. Yerel bir çalıştırıcı (runner) ciha
 
 Tekrar çalıştırmalarda önbellek devreye girer ve model çağrısı yapılmaz. Claude yalnızca bir şey bozulduğunda ya da Jev emin olmadığında devreye girer; kararını verip testi **kaldığı yerden devam ettirebilir**.
 
+
+**Gerçek uygulamada ölçüldü** (Galaxy S22 Ultra, 3'er çalıştırma): aynı "etkinlik oluştur" testinin medyanı JevClaude ile **47 sn ve ≈ 0,0008 $**, düz Claude Code ile **90 sn ve ≈ 0,28 $**. Akış bir kez yazıldıktan sonra çalıştırma başına yaklaşık 1,9 kat daha hızlı ve 350 kat daha ucuz. İki yöntem de 3'te 2 geçti, hiçbiri yanlış "geçti" demedi. Örneklem küçük; ayrıntılar ve uyarılar için [README.md](README.md#benchmark) dosyasına bak.
+
 ## Neden?
 
 Claude Code telefonu kendisi sürdüğünde her adım tam bir LLM turu oluyor: ekran görüntüsü, okuma, düşünme, aksiyon. Bu hem yavaş hem pahalı. Oysa bu kararların çoğu küçük ve tiplidir: "Bu 30 elemandan hangisi giriş butonu?", "Ekranda sepet görünüyor mu, evet/hayır?". JevClaude'da her adım şu sırayla çözülür:

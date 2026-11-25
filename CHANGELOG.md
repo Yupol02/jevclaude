@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] — 2026-11-25
+
+Bugs and gaps found by testing a real Jetpack Compose app on a Galaxy S22 Ultra; JevClaude vs plain Claude Code numbers are in the README.
+
+### Fixed
+- **UiAutomator2 can type into Compose text fields.** These fields often report no focus, so "type into the focused element" failed with `no such element`. The runner now passes the tapped field to the driver, which sets its text by exact bounds, then falls back to the focused element, then to `adb input text` (ASCII only).
+- **A UiAutomator2 server left running no longer breaks the adb backend.** The adb path stops it on connect, and retries a failed `uiautomator dump` once after stopping it.
+- **`uiautomator dump` exit codes:** a non-zero exit is no longer treated as a failure when the dump was written. Seen on Samsung / Android 16.
+
+### Added
+- **Unlabeled tap targets** get a `near="…"` hint from the labelled element they touch, and Jev is told what it means. On the test app, "the date field" was picked at 0.87–1.00 confidence, and "the time field" went from 0.52 (paused) to 0.98.
+- **Taps under the keyboard:** when the target sits in the lower half of the screen and the keyboard is up, the keyboard is hidden first and the element is re-located.
+- **README:** demo GIF, a real-app benchmark against plain Claude Code, and a "Use it in your project" section.
+
 ## [0.2.2] — 2026-11-25
 
 First real-device run (Samsung Galaxy S22 Ultra, Android 16): both example flows pass; measured numbers are in the README.

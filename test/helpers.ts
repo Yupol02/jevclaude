@@ -37,6 +37,8 @@ export class FakeDriver implements Driver {
   current: string;
   taps: Array<[number, number]> = [];
   typed: string[] = [];
+  typedInto: Array<string | undefined> = [];
+  keyboard = false;
   keys: string[] = [];
   swipes = 0;
   crashes: string[] = [];
@@ -58,8 +60,9 @@ export class FakeDriver implements Driver {
     this.swipes += 1;
     this.onSwipe(this);
   }
-  async typeText(t: string) {
+  async typeText(t: string, target?: { text?: string; desc?: string; resourceId?: string }) {
     this.typed.push(t);
+    this.typedInto.push(target ? target.resourceId || target.desc || target.text : undefined);
   }
   async pressKey(k: string) {
     this.keys.push(k);
@@ -67,7 +70,13 @@ export class FakeDriver implements Driver {
   async back() {
     this.keys.push("back");
   }
-  async hideKeyboard() {}
+  async hideKeyboard() {
+    this.keyboard = false;
+    this.keys.push("hide_keyboard");
+  }
+  async keyboardShown() {
+    return this.keyboard;
+  }
   async launch(app: string) {
     this.launched.push(app);
   }

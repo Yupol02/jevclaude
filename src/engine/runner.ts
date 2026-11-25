@@ -484,6 +484,7 @@ export class Runner {
         }
       }
 
+      element = await this.avoidKeyboard(snap, element);
       const { x, y } = center(element.bounds);
       await this.driver.tap(x, y);
       this.invalidate();
@@ -497,7 +498,7 @@ export class Runner {
           );
         }
         await sleep(200);
-        await this.driver.typeText(text);
+        await this.driver.typeText(text, element);
         if (typing.submit) await this.driver.pressKey("enter");
       }
       const after = await this.afterAction();
@@ -509,6 +510,23 @@ export class Runner {
         ...after.extra,
       });
     }
+  }
+
+  /**
+   * If the target sits in the lower half of the screen while the keyboard is up, the tap would hit the
+   * keyboard: hide it first and re-locate the same element (its position may move).
+   */
+  private async avoidKeyboard(snap: UiSnapshot, element: UiElement): Promise<UiElement> {
+    if (!this.driver.keyboardShown || !snap.screen.height) return element;
+    if (center(element.bounds).y < snap.screen.height * 0.5) return element;
+    if (!(await this.driver.keyboardShown())) return element;
+    const selector = uniqueSelector(snap, element);
+    await this.driver.hideKeyboard();
+    await sleep(this.config.settleMs);
+    const fresh = await this.snapshot(true);
+    const hits = selector ? findBySelector(fresh, selector) : [];
+    this.log(`keyboard was covering "${labelOf(element)}"; hid it before tapping`);
+    return hits.length === 1 ? hits[0]! : element;
   }
 
   /**

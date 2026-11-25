@@ -37,6 +37,7 @@ export function pickElementQuestion(snap: UiSnapshot, target: string, kind: "tap
       kind === "type"
         ? `Which input field should the user type into to fill: "${target}"?`
         : `Which on-screen element should the user tap to do: "${target}"?`,
+      'An unlabeled tap target is shown with near="…": the text of the element it touches, usually the field it opens (its label, placeholder or validation message).',
       "Pick the single best element. Pick 'none' if nothing on the screen fits.",
     ].join("\n"),
     criteria,

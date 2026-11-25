@@ -1,4 +1,4 @@
-import type { UiSnapshot } from "../core/uitree.js";
+import type { UiElement, UiSnapshot } from "../core/uitree.js";
 
 export type Platform = "android" | "ios";
 
@@ -13,8 +13,12 @@ export interface Driver {
   snapshot(): Promise<UiSnapshot>;
   tap(x: number, y: number): Promise<void>;
   swipe(x1: number, y1: number, x2: number, y2: number, durationMs?: number): Promise<void>;
-  /** Types into the focused field. Unicode support depends on the driver (see `unicodeInput`). */
-  typeText(text: string): Promise<void>;
+  /**
+   * Types into the focused field. `target` is the field that was just tapped; drivers that can set a
+   * field's text directly (UiAutomator2) use it, because Compose fields don't always report focus.
+   * Unicode support depends on the driver (see `unicodeInput`).
+   */
+  typeText(text: string, target?: UiElement): Promise<void>;
   readonly unicodeInput: boolean;
   /** True when snapshot() is cheap (≈0.2 s), so the runner can afford stability double-checks. */
   readonly fastSnapshot: boolean;
@@ -22,6 +26,8 @@ export interface Driver {
   pressKey(key: string): Promise<void>;
   back(): Promise<void>;
   hideKeyboard(): Promise<void>;
+  /** Whether the on-screen keyboard is showing (optional; used to avoid tapping under it). */
+  keyboardShown?(): Promise<boolean>;
 
   launch(app: string): Promise<void>;
   stop(app: string): Promise<void>;

@@ -16,6 +16,7 @@ Claude writes a test flow once. A local runner drives the device. [TypeSafe Jev]
 
 A replay cache makes re-runs model-free. Claude only hears back when something fails or Jev isn't sure, and it can then decide and **resume the run where it stopped**.
 
+
 ```
 Claude Code ──(MCP: run_flow / resume_flow)──▶ Runner ──▶ Driver
      ▲                                           │          ├─ Android: adb + UiAutomator2 server
@@ -42,7 +43,9 @@ When Claude Code tests an app by driving the device itself, every step is a full
 | Risky actions (buy, delete, send) | whatever the model decides | blocked by default; the user must approve |
 | AI assertions | — | `expect:` **fails the test** below threshold; the uncertain zone goes back to Claude |
 
-Jev input costs about $0.042 per million tokens, and output is free. A 4-question check of the bundled login screen used 2,327 tokens (well under a cent) and took 167–683 ms per call (`npm run jev:smoke`).
+Jev input costs about $0.042 per million tokens, and output is free.
+
+**Measured on a real app** (details in [Benchmark](#benchmark)): creating an event in a real Android app took a median of **47 s and ≈ $0.0008 per run** with JevClaude, against **90 s and ≈ $0.28** when plain Claude Code drove the same phone. That is about 1.9× faster and about 350× cheaper per run, once the flow is written. Both methods passed 2 of 3 runs. The sample is small; read the caveats before quoting it.
 
 ## Quick start
 
@@ -60,10 +63,24 @@ node dist/cli.js doctor          # checks tools, devices, servers and the Jev ke
 node dist/cli.js run examples/flows/settings-smoke.yaml --html report.html
 ```
 
+### Use it in your project
+
+1. In your app's repository, create the starter files:
+   ```bash
+   npx jevclaude init     # jevclaude.config.yaml, flows/smoke.yaml, .env
+   ```
+2. Put `TYPESAFE_API_KEY` and any test-account values (`TEST_EMAIL`, …) in `.env`. `init` creates it; keep it out of git.
+3. Connect a phone with USB debugging and run:
+   ```bash
+   npx jevclaude setup android && npx jevclaude doctor
+   ```
+4. Connect Claude Code to it (next section). Ask Claude to test a feature; it writes the flow into `flows/` and runs it.
+5. Commit `flows/` and `.jevclaude/cache/`, so CI re-runs need no model calls for element picks. Run them on every PR with [examples/ci/github-actions-android.yml](examples/ci/github-actions-android.yml).
+
 ### Use from Claude Code
 
 ```bash
-claude mcp add jevclaude -- node /absolute/path/to/JevClaude/dist/cli.js mcp
+claude mcp add jevclaude -- npx -y jevclaude mcp
 ```
 
 Then ask: *"test the login flow on my phone"*. The bundled skill (`.claude/skills/test-feature`) tells Claude to write one flow, call `run_flow` once, and read only the report.
@@ -134,9 +151,12 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 ## Status and limits
 
 - **What's verified:**
-  - 48 unit tests, 90% line coverage, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
+  - 53 unit tests, 89% line coverage, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
   - The live Jev API is checked with `npm run jev:smoke`.
-  - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI, with both backends, the replay cache, Unicode typing and `run_flow` → `resume_flow` over MCP. Results are below.
+  - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI. Verified there:
+    - both backends, the replay cache and `run_flow` → `resume_flow` over MCP
+    - a production Jetpack Compose app, including Unicode typing into Compose fields and date/time fields that have no accessibility label
+    - results are below
 - **What's not verified yet:**
   - iOS on a live simulator.
   - The risk guard and permission dialogs on a device (they are covered by unit tests only).
@@ -144,6 +164,8 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 - **Jev's weak spots:** counting, arithmetic and multi-hop reasoning. Check numbers with `see:`.
 - **Literal reading:** Jev takes wording literally. "Results are shown *under* the search field" correctly scored 0.19 on a phone whose search bar sits *below* the results. Describe what must be true, not where it is.
 - **Text-only:** canvas, games and Flutter apps without semantics produce empty trees. Those need Claude with screenshots.
+- **Unlabeled controls:** a tap target with no label gets the text it touches as a `near="…"` hint (e.g. a date field's "Date is required" message). It works, but adding a `contentDescription` / `semantics` label to the app is more reliable, and better for accessibility.
+- **Don't record the screen in parallel:** a `screencap` loop running next to a test slowed the phone enough to break UiAutomator2 calls. Use `--trace` (one screenshot per step) or `--record`.
 - **Android typing:** the adb-only backend types ASCII only. `setup android` enables Unicode.
 - **iOS:** simulator only for now. Real devices need WebDriverAgent signing.
 
@@ -157,7 +179,29 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 
 It prints pass rate, median time, tokens and cost.
 
-### Measured so far
+### Real app: JevClaude vs plain Claude Code
+
+On 2026-11-25 the same task was run 3 times with each method on a Galaxy S22 Ultra (Android 16). The task is "add a new event": title, date picker (30 Nov 2026), content, time picker (18:00), then *create*, then check it is listed. The app is the author's own Jetpack Compose app, version 1.8.
+
+Every claimed pass was checked independently by reading the event list afterwards. The checker found the title, date and time, with exactly one copy.
+
+| | JevClaude (adb backend, J1 cold cache, J2–J3 warm) | Plain Claude Code (`claude -p`, adb + screenshots) |
+|---|---|---|
+| Run times | 47.4 · 48.1 · 45.5 s | 159.5 · 78.5 · 89.6 s |
+| **Median time** | **47.4 s** | **89.6 s** |
+| Passed on its own | 2/3: J2 stopped as `uncertain` (p = 0.84) on a correctly filled form | 2/3: C1 failed, and the phone also dropped off USB during it |
+| False passes | 0 | 0 |
+| Tokens per run | 16–21 k (Jev) | 0.63–1.74 M (Claude, mostly cache reads) |
+| **Median cost** | **≈ $0.0008** | **≈ $0.28** (range $0.25–0.43) |
+| Model | jev-1.14.0, 18–24 calls | claude-sonnet-5-5, 23–49 turns |
+
+What this does and doesn't show:
+- **It's per run, after the flow exists.** Writing and debugging this flow took several iterations, which this table doesn't count. Plain Claude needed no flow. JevClaude pays off when the same test runs again: every PR, every release.
+- **The sample is small.** One app, one task, 3 runs each.
+- **JevClaude ran on the slow backend** (~2.3 s per screen read). The UiAutomator2 backend couldn't type into Compose fields until 0.2.3. With it, a 19-step version of the same form, filled but not saved, now takes 26–33 s. The create flow hasn't been re-measured on it.
+- **Plain Claude made a mistake.** In C1 it opened a different event by accident; it only looked and went back. It also had taps land under the on-screen keyboard. 0.2.3 hides the keyboard before such taps.
+
+### Measured so far: Android Settings
 
 These are single runs on a Samsung Galaxy S22 Ultra (Android 16, Turkish UI) on 2026-11-25, with Jev `jev-1.14.0` through the TypeSafe API. The flows are [settings-smoke.yaml](examples/flows/settings-smoke.yaml) (5 steps; the target is found after 3 scrolls) and [settings-search-unicode.yaml](examples/flows/settings-search-unicode.yaml) (7 steps).
 
@@ -170,7 +214,7 @@ These are single runs on a Samsung Galaxy S22 Ultra (Android 16, Turkish UI) on 
 | settings-smoke, UiAutomator2, warm cache | passed · 13.7 s · 6 Jev calls · 5,461 tokens |
 | settings-search-unicode (types `parlaklık`) | passed · 11.0–11.7 s · 6 Jev calls · ≈ 4,680 tokens |
 
-The plain Claude Code + adb baseline has **not been measured yet**, so there is no "N× faster" claim here.
+| fill-event-form, real Compose app, UiAutomator2 (19 steps, not saved) | passed · 26.0–33.2 s · 18–21 Jev calls · ≈ 16–19 k tokens |
 
 ## Development
 

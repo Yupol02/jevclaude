@@ -87,6 +87,22 @@ export class Uia2Client {
     await this.req("POST", `/session/${this.session}/keys`, { text, replace: false });
   }
 
+  /** Set the text of the element at exactly these bounds (works for Compose fields that report no focus). */
+  async setTextAt(bounds: { left: number; top: number; right: number; bottom: number }, text: string): Promise<void> {
+    const b = `[${bounds.left},${bounds.top}][${bounds.right},${bounds.bottom}]`;
+    const find = async (selector: string) =>
+      (await this.req("POST", `/session/${this.session}/element`, { strategy: "xpath", selector })) as Record<string, string>;
+    let el: Record<string, string>;
+    try {
+      el = await find(`//*[@bounds='${b}' and contains(@class,'EditText')]`);
+    } catch {
+      el = await find(`//*[@bounds='${b}']`);
+    }
+    const id = el.ELEMENT ?? el["element-6066-11e4-a52e-4f735466cecf"];
+    if (!id) throw new Error("UiAutomator2 returned no element id");
+    await this.req("POST", `/session/${this.session}/element/${id}/value`, { text, replace: false });
+  }
+
   async stop(): Promise<void> {
     if (this.session) await this.req("DELETE", `/session/${this.session}`).catch(() => {});
     this.proc?.kill();

@@ -51,7 +51,13 @@ export class Adb {
   async dumpUi(): Promise<string> {
     // Writing to a file and cat-ing it is the most portable variant across Android versions.
     const path = "/sdcard/jevclaude_dump.xml";
-    await this.shell(["uiautomator", "dump", "--compressed", path], 30_000);
+    try {
+      await this.shell(["uiautomator", "dump", "--compressed", path], 30_000);
+    } catch (e) {
+      // Some devices (seen on Samsung / Android 16) exit non-zero although the dump was written.
+      const out = String((e as { stdout?: unknown }).stdout ?? "");
+      if (!/dumped to/i.test(out)) throw e;
+    }
     const xml = await this.shell(["cat", path]);
     const start = xml.indexOf("<?xml");
     if (start < 0) throw new Error(`uiautomator dump failed: ${xml.slice(0, 200)}`);

@@ -49,7 +49,7 @@ export class IosDriver implements Driver {
     await this.wda.drag(x1, y1, x2, y2, Math.max(0.05, durationMs / 1000));
   }
 
-  async typeText(text: string) {
+  async typeText(text: string, _target?: unknown) {
     await this.wda.keys(text);
   }
 

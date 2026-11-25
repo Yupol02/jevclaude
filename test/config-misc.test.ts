@@ -92,7 +92,7 @@ describe("runner extras", () => {
     );
     expect(r.status).toBe("passed");
     expect(dev.launched).toEqual(["com.example.shop", "com.other"]);
-    expect(dev.keys).toEqual(["enter"]);
+    expect(dev.keys).toEqual(["enter", "hide_keyboard"]);
     expect(dev.swipes).toBe(1);
   });
 

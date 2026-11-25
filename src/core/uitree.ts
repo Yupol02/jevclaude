@@ -18,6 +18,11 @@ export interface UiElement {
   resourceId: string;
   /** Text gathered from descendants, for clickable containers without their own label. */
   childText: string;
+  /**
+   * For clickable elements with no label at all: the label of the element they overlap or touch
+   * (e.g. an unlabeled tap target sitting right above a field's "Date is required" text).
+   */
+  near?: string;
   pkg: string;
   bounds: Bounds;
   clickable: boolean;
@@ -46,6 +51,7 @@ export function makeSnapshot(elements: UiElement[], packages: string[], screen: 
   elements.forEach((el, i) => {
     el.index = i;
   });
+  annotateNear(elements);
   const compact = elements.map(describeElement).join("\n");
   const hash = createHash("sha1").update(compact).digest("hex").slice(0, 12);
   const sig = [
@@ -60,6 +66,31 @@ export function makeSnapshot(elements: UiElement[], packages: string[], screen: 
   return { elements, packages, hash, fingerprint, screen };
 }
 
+const NEAR_GAP_PX = 24;
+
+/** Give unlabeled clickable elements the label of a labelled element they overlap or directly touch. */
+function annotateNear(elements: UiElement[]) {
+  for (const el of elements) {
+    if (!el.clickable || el.text || el.desc || el.childText || el.resourceId) continue;
+    let best: { label: string; score: number } | undefined;
+    for (const other of elements) {
+      if (other === el) continue;
+      const label = other.text || other.desc || other.childText;
+      if (!label) continue;
+      const a = el.bounds;
+      const b = other.bounds;
+      const xOverlap = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      if (xOverlap < 0.5 * Math.min(a.right - a.left, b.right - b.left)) continue;
+      // Vertical distance between the boxes (0 when they overlap or touch).
+      const gap = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
+      if (gap > NEAR_GAP_PX) continue;
+      const score = gap - (Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top) ? 1000 : 0); // prefer overlap
+      if (!best || score < best.score) best = { label: label.slice(0, 80), score };
+    }
+    if (best) el.near = best.label;
+  }
+}
+
 export function center(b: Bounds): { x: number; y: number } {
   return { x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 };
 }
@@ -68,7 +99,7 @@ export const clean = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").t
 
 /** Human-readable label for an element (what a user would call it). */
 export function labelOf(el: UiElement): string {
-  return el.text || el.desc || el.childText || idSuffix(el.resourceId);
+  return el.text || el.desc || el.childText || idSuffix(el.resourceId) || (el.near ? `near ${el.near}` : "");
 }
 
 export function idSuffix(resourceId: string): string {
@@ -82,6 +113,7 @@ export function describeElement(el: UiElement): string {
   if (label) parts.push(JSON.stringify(label.slice(0, 120)));
   if (el.text && el.desc && el.desc !== el.text) parts.push(`desc=${JSON.stringify(el.desc.slice(0, 80))}`);
   if (!label && el.childText) parts.push(`contains=${JSON.stringify(el.childText)}`);
+  if (!label && !el.childText && el.near) parts.push(`near=${JSON.stringify(el.near)}`);
   if (el.resourceId && idSuffix(el.resourceId) !== label) parts.push(`id=${idSuffix(el.resourceId)}`);
   const flags = [
     el.clickable && "clickable",
