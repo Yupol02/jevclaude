@@ -143,5 +143,7 @@ export class Uia2Client {
   async stop(): Promise<void> {
     if (this.session) await this.req("DELETE", `/session/${this.session}`).catch(() => {});
     this.proc?.kill();
+    // Each run forwards a fresh local port; drop it so forwards don't pile up across runs.
+    await this.adb.run(["forward", "--remove", `tcp:${this.localPort}`]).catch(() => {});
   }
 }

@@ -16,6 +16,8 @@ export interface WebItem {
   e: 0 | 1;
   /** password field */
   p?: 0 | 1;
+  /** Link target without query or fragment: a path on the same site, or host + path elsewhere. */
+  u?: string;
 }
 
 export interface WebPage {
@@ -55,7 +57,13 @@ export const PAGE_SCRIPT = `(() => {
     const type = (el.getAttribute("type") || "").toLowerCase();
     const editable = (tag === "input" && !/^(button|submit|reset|checkbox|radio|hidden|image|file|range|color)$/.test(type)) || tag === "textarea" || el.isContentEditable;
     const text = norm(el.innerText || el.value || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.title || el.getAttribute("alt"));
-    out.push({ k: tag, t: text.slice(0, 120), id: el.id || el.getAttribute("name") || "", x: r.left, y: r.top, w: r.width, h: r.height, c: 1, e: editable ? 1 : 0, p: type === "password" ? 1 : 0 });
+    // Where a link goes survives machine translation of its text (Chrome's auto-translate). Query
+    // strings and fragments are dropped: they can carry tokens or personal data.
+    let u = "";
+    if (tag === "a" && el.href) {
+      try { const h = new URL(el.href); if (/^https?:$/.test(h.protocol)) u = decodeURIComponent((h.host === location.host ? "" : h.host) + h.pathname).slice(0, 80); } catch {}
+    }
+    out.push({ k: tag, t: text.slice(0, 120), id: el.id || el.getAttribute("name") || "", x: r.left, y: r.top, w: r.width, h: r.height, c: 1, e: editable ? 1 : 0, p: type === "password" ? 1 : 0, u });
     if (out.length >= 150) break;
   }
   const seen = new Set();
@@ -148,7 +156,7 @@ export function mergeWebPage(snap: UiSnapshot, page: WebPage): UiSnapshot {
       index: -1,
       cls: `Web.${it.k}`,
       text: clean(it.t),
-      desc: "",
+      desc: it.u ? `link to ${clean(it.u)}` : "",
       resourceId: it.id ? `web:${it.id}` : "",
       childText: "",
       pkg: host.pkg,

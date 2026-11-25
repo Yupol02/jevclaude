@@ -39,7 +39,7 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
 | `see` | `- see: "Welcome"` | Deterministic. Some element's text, description or child text contains the string (case-insensitive). Retried for 6 s |
 | `not_see` | `- not_see: "Error"` | Deterministic |
 | `wait_for` | `- wait_for: "Home"` | Deterministic. Like `see`, with a 10 s window |
-| `expect` | `- expect: "Cart shows the red sneakers"` | Jev. p ≥ 0.80 passes, p ≤ 0.15 fails, anything between is `uncertain`. Re-asked only when the screen changes |
+| `expect` | `- expect: "Cart shows the red sneakers"` | Jev. p ≥ 0.75 passes, p ≤ 0.15 fails, anything between is `uncertain`. Re-asked only when the screen changes |
 
 ### Control
 

@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/jevclaude?color=cb3837&logo=npm)](https://www.npmjs.com/package/jevclaude)
 [![CI](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml/badge.svg)](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml)
+[![e2e on emulator](https://github.com/Yupol02/jevclaude/actions/workflows/e2e-android.yml/badge.svg)](https://github.com/Yupol02/jevclaude/actions/workflows/e2e-android.yml)
 [![provenance](https://img.shields.io/badge/npm-provenance-2ea44f?logo=sigstore)](https://www.npmjs.com/package/jevclaude#provenance)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![node](https://img.shields.io/node/v/jevclaude)
@@ -53,6 +54,7 @@ Jev input costs about $0.042 per million tokens, and output is free.
 |---|---|---|---|
 | Samsung Calculator: 12 × 7, check the preview, clear (3 runs each, all passed) | **4.9 s · ≈ $0.00013** | 52.6 s · ≈ $0.19 | ~11× faster, ~1,400× cheaper |
 | Real Compose app: create an event (3 runs each, 2/3 passed each; older JevClaude, slow backend) | 47 s · ≈ $0.0008 | 90 s · ≈ $0.28 | ~1.9× faster, ~350× cheaper |
+| Second real app: read-only tour of 4 tabs with a Turkish search (JevClaude 3/3, plain Claude 2/3) | **13.0 s · ≈ $0.00024** | 98.2 s · ≈ $0.36 | ~7.5× faster, ~1,500× cheaper |
 
 All per run, once the flow is written. The samples are small; read the caveats before quoting them.
 
@@ -85,6 +87,8 @@ node dist/cli.js run examples/flows/settings-smoke.yaml --html report.html
    ```
 4. Connect Claude Code to it (next section). Ask Claude to test a feature; it writes the flow into `flows/` and runs it.
 5. Commit `flows/` and `.jevclaude/cache/`, so CI re-runs need no model calls for element picks. Run them on every PR with [examples/ci/github-actions-android.yml](examples/ci/github-actions-android.yml).
+
+This repository runs that setup on itself: [e2e-android.yml](.github/workflows/e2e-android.yml) boots an API 34 emulator on GitHub Actions, installs the UiAutomator2 server and runs [ci-emulator-settings.yaml](examples/flows/ci-emulator-settings.yaml). That flow uses exact selectors and two scrolls, needs no Jev key, and passes in about 22 s.
 
 ### Use from Claude Code
 
@@ -175,7 +179,7 @@ Full example: [examples/flows/chrome-web.yaml](examples/flows/chrome-web.yaml).
 | Question | How | Rule (configurable in `jevclaude.config.yaml`) |
 |---|---|---|
 | Which element is "the login button"? | exact match → cache → Jev `choice` over on-screen elements | confidence below 0.6 → `uncertain`; `none` → scroll, then `failed` |
-| Does the screen match `expect:`? | Jev `noul` | p ≥ 0.80 passed · p ≤ 0.15 failed · otherwise `uncertain` → Claude. On the phone, correct screens scored 0.70–0.98 (mostly ≥ 0.80) and wrong ones 0.01–0.19 |
+| Does the screen match `expect:`? | Jev `noul` | p ≥ 0.75 passed · p ≤ 0.15 failed · otherwise `uncertain` → Claude. Across two phones, correct screens scored 0.77–0.99 and wrong ones 0.01–0.19. At 0.80, correct Settings-search and Play Store screens on the S23 FE (0.77–0.79) were sent to Claude |
 | Is an error or crash visible after an action? | crash logs on failure and at the end; Jev `noul` only when error-like text or a dialog is on screen (`error_check: auto`) | crash or p ≥ 0.85 (`error_fail`) → `failed` |
 | Is this tap or type risky (money, install/uninstall, deletion, messaging, account/security)? | Jev `noul`, asked together with the pick and cached once it's known to be safe | p ≥ 0.5 → `blocked` until the user allows it. Play Store "Install" scored 0.81–0.87; back / scroll / screenshots 0.03 |
 | Permission dialog? | package / alert detection, button by regex, then Jev | per-flow `permissions:` policy |
@@ -186,7 +190,7 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 ## Status and limits
 
 - **What's verified:**
-  - 65 unit tests, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
+  - 82 unit tests, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
   - The live Jev API is checked with `npm run jev:smoke`.
   - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI. Verified there:
     - both backends, the replay cache and `run_flow` → `resume_flow` over MCP
@@ -195,6 +199,8 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
     - negative controls: wrong expectations fail at p = 0.01
     - the risk guard on a real Play Store page: "Install" is blocked, harmless actions are allowed (asked without tapping)
     - results are below
+  - **A second phone:** Samsung Galaxy S23 FE, Android 16, Turkish UI. The same stock flows plus [chrome-web.yaml](examples/flows/chrome-web.yaml) pass there; see [Second phone](#second-phone-and-maestro-galaxy-s23-fe).
+  - **An emulator in CI:** every push to `main` that touches `src/` runs [a Settings flow](examples/flows/ci-emulator-settings.yaml) on an API 34 emulator, without a Jev key.
 - **What's not verified yet:**
   - iOS on a live simulator.
   - Permission dialogs on a device (covered by unit tests only).
@@ -217,6 +223,32 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 - optionally Maestro
 
 It prints pass rate, median time, tokens and cost.
+
+### Second phone and Maestro (Galaxy S23 FE)
+
+The flows were written on the S22 Ultra and run unchanged on a Galaxy S23 FE (Android 16, Turkish UI) on 2026-11-25. The first runs there found five bugs, all fixed in the next release (see the [changelog](CHANGELOG.md)). Results with the fixes:
+
+| Flow | Runs passed | Time per run |
+|---|---|---|
+| [samsung-calculator](examples/flows/samsung-calculator.yaml) | 5/5 | 6.7–7.8 s |
+| [samsung-stopwatch](examples/flows/samsung-stopwatch.yaml) | 1/1 | 6.3 s |
+| [settings-search-unicode](examples/flows/settings-search-unicode.yaml) | 1/1 | 7.0 s |
+| [settings-smoke](examples/flows/settings-smoke.yaml) | 3/3 | 8.2–8.7 s |
+| [playstore-search](examples/flows/playstore-search.yaml) | 1/1 | 6.4 s |
+| [chrome-web](examples/flows/chrome-web.yaml) | 5/6 | 11.0–16.1 s |
+
+The one Chrome failure: the search icon was tapped, but the search box never opened. It happened while several identical test tabs were open; with those closed, the next 3 runs passed. The cause isn't confirmed.
+
+Chrome auto-translated Wikipedia into Turkish on this phone, so the flow names things by role ("the link about the largest cities") instead of by English text. Web links also carry their target path (`link to /wiki/List_of_largest_cities…`), which survives translation.
+
+**Maestro 2.12.1, same phone, same Calculator steps** (`tapOn` by resource id, `assertVisible: "84"`. Neither needed Claude; JevClaude made one Jev call per run):
+
+| | Runs passed | Flow time | Wall time incl. startup |
+|---|---|---|---|
+| Maestro | 4/5 (run 1 failed its first tap) | 26.2–26.5 s | 60–63 s |
+| JevClaude | 5/5 | 6.7–7.8 s | 8.6–10.2 s |
+
+Maestro waits for animations to finish after every command, and its wall time includes starting its driver on each run. JevClaude's startup took about 2 s per run, and after each step it re-reads the screen only until two reads agree.
 
 ### 0.3.0 final check (stock apps, same phone, stable cable)
 
@@ -268,6 +300,32 @@ What this does and doesn't show:
 - **The sample is small.** One app, one task, 3 runs each.
 - **JevClaude ran on the slow backend** (~2.3 s per screen read). The UiAutomator2 backend couldn't type into Compose fields until 0.2.3. With it, a 19-step version of the same form, filled but not saved, now takes 26–33 s. The create flow hasn't been re-measured on it.
 - **Plain Claude made a mistake.** In C1 it opened a different event by accident; it only looked and went back. It also had taps land under the on-screen keyboard. 0.2.3 hides the keyboard before such taps.
+
+### Second real app: read-only tour (Galaxy S23 FE)
+
+On 2026-11-25 each method ran the same task 3 times on a Galaxy S23 FE (Android 16, Turkish UI), with the UiAutomator2 backend and the current code. The app is a real assistant-style Jetpack Compose app that isn't public, so its name and screens aren't shown here. The task changes nothing:
+1. Open the app and check the chat home screen.
+2. Check the sections of the "today" tab.
+3. Check the routine templates.
+4. In settings, search for `kişilik` (Turkish ş and ı), and check that only the matching setting is listed.
+5. Open that setting, check its three options, and go back.
+
+After every run, a separate read-only check confirmed that the app's settings, routines and "messages sent to the cloud" counter were unchanged.
+
+| | JevClaude (run 1 cold cache, runs 2–3 warm) | Plain Claude Code (`claude -p`, adb + screenshots) |
+|---|---|---|
+| Passed | **3/3** | 2/3 (by its own report) |
+| Run times (wall) | 12.2 · 13.0 · 14.6 s | 101.0 · 98.2 · 90.4 s |
+| **Median time** | **13.0 s** | **98.2 s** |
+| Tokens per run | 4.8–6.9 k (Jev) | 1.1–1.6 M (Claude, mostly cache reads) |
+| **Median cost** | **≈ $0.00024** | **≈ $0.36** (range $0.31–0.37) |
+| Model | jev-1.14.0, 6–8 calls | claude-sonnet-5-5, 36–43 turns |
+
+What this does and doesn't show:
+- **Plain Claude's failure was typing.** `adb input text` can't type ş or ı. In run 1 it typed `kisilik`, the app's search found nothing, and it gave up on that step. In runs 2–3 it typed the word key by key on the on-screen keyboard. JevClaude types Unicode through UiAutomator2.
+- **The flow was tuned once.** It passed on its first try, and one `expect:` was then reworded because the news section was still loading (p = 0.76). Writing the flow isn't counted in the table.
+- **One check is borderline.** The "today" screen check scored exactly 0.75, the pass threshold, in two of the three runs.
+- **The sample is small:** one app, one task, 3 runs each.
 
 ### Stock apps (Samsung, Turkish UI)
 

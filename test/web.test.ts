@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findBySelector, labelOf, screenContains } from "../src/core/uitree.js";
+import { describeElement, findBySelector, labelOf, screenContains } from "../src/core/uitree.js";
 import { findWebContainer, mergeWebPage, urlHint, type WebPage } from "../src/core/web.js";
 import { pickTarget } from "../src/driver/android/cdp.js";
 import { parseAndroidXml } from "../src/driver/android/xml.js";
@@ -27,7 +27,7 @@ const PAGE: WebPage = {
   title: "Istanbul - Wikipedia",
   items: [
     { k: "input", t: "Search Wikipedia", id: "searchInput", x: 16, y: 10, w: 300, h: 36, c: 1, e: 1 },
-    { k: "a", t: "largest city", x: 100, y: 300, w: 80, h: 20, c: 1, e: 0 },
+    { k: "a", t: "largest city", x: 100, y: 300, w: 80, h: 20, c: 1, e: 0, u: "/wiki/List_of_largest_cities" },
     { k: "p", t: "Istanbul straddles the Bosphorus strait.", x: 16, y: 260, w: 352, h: 40, c: 0, e: 0 },
     { k: "p", t: "below the fold", x: 16, y: 900, w: 352, h: 40, c: 0, e: 0 },
   ],
@@ -54,6 +54,8 @@ describe("web pages read through DevTools", () => {
     expect(link.clickable).toBe(true);
     // scale = 1080 / 384 = 2.8125 → x 100 → 281, y 300 → 220 + 844 = 1064
     expect(link.bounds).toEqual({ left: 281, top: 1064, right: 506, bottom: 1120 });
+    // the link target is shown next to its (possibly machine-translated) text
+    expect(describeElement(link)).toContain('desc="link to /wiki/List_of_largest_cities"');
 
     const input = findBySelector(merged, { id: "web:searchInput" })[0]!;
     expect(input.editable).toBe(true);

@@ -1,3 +1,4 @@
+import { tapPoint } from "../core/tap.js";
 import {
   center,
   describeSnapshot,
@@ -28,8 +29,8 @@ import { describeStep, describeTarget, type Flow, interpolate, type Step, type T
 
 export interface RunnerConfig {
   /**
-   * `expect:` passes at noul ≥ pass. 0.80: on real devices correct screens scored 0.70–0.98 (mostly
-   * ≥ 0.80) while wrong ones scored ≤ 0.19, so 0.85 sent too many correct screens to Claude.
+   * `expect:` passes at noul ≥ pass. 0.75: on two real phones correct screens scored 0.70–0.99 (several
+   * at 0.77–0.84) while wrong ones scored ≤ 0.19, so higher thresholds sent correct screens to Claude.
    */
   pass: number;
   /** "Is an error visible?" fails the step at noul ≥ errorFail (kept stricter: field hints score up to ~0.7). */
@@ -69,8 +70,11 @@ export interface RunnerConfig {
   trace: boolean;
 }
 
+/** After a launch or URL open, the screen must hold still this long (see settle()). */
+const LAUNCH_HOLD_MS = 700;
+
 export const DEFAULT_CONFIG: RunnerConfig = {
-  pass: 0.8,
+  pass: 0.75,
   errorFail: 0.85,
   fail: 0.15,
   minPickConfidence: 0.6,
@@ -335,7 +339,7 @@ export class Runner {
       this.keyboardMaybeUp = false;
       await this.driver.openUrl(interpolate(step.open, this.env), flow.app);
       this.invalidate();
-      return this.afterAction();
+      return this.afterAction(false, LAUNCH_HOLD_MS);
     }
     if ("allow_risky" in step) {
       this.allowRiskyNext = true;
@@ -393,7 +397,7 @@ export class Runner {
       await sleep(400);
       fg = await this.driver.foregroundApp();
     }
-    const settled = await this.settle(undefined);
+    const settled = await this.settle(undefined, undefined, LAUNCH_HOLD_MS);
     if (fg && fg !== app && !settled.packages.includes(app)) {
       return new Outcome(
         "failed",
@@ -464,7 +468,9 @@ export class Runner {
       // ask Jev (to heal) only on the first screen and once scrolling is exhausted.
       const deferPick = Boolean(cached) && !cacheCandidate && scrolls > 0 && canScrollMore;
       // Exact selectors fall back to Jev only when it is configured; plain text targets always need it.
-      const askPick = !element && !deferPick && (typeof target === "string" || (Boolean(this.jev) && Boolean(target.text || target.desc)));
+      // Exact selectors are exact: they are searched (and scrolled to) deterministically and never
+      // handed to Jev, which could pick a "similar" element (seen on a translated page).
+      const askPick = !element && !deferPick && typeof target === "string";
       const knownSafe = cached?.risk !== undefined && cached.risk < this.config.riskBlock && decidedBy === "cache";
       // Only judge risk when we are about to act (an element is known, or Jev may pick one now).
       const askRisk = this.config.riskGuard && !this.allowRiskyNext && !knownSafe && Boolean(this.jev) && (Boolean(element) || askPick);
@@ -501,7 +507,7 @@ export class Runner {
           const before = snap.hash;
           await this.swipe(direction);
           await sleep(this.config.settleMs);
-          const after = await this.snapshot(true);
+          const after = await this.holdStill(await this.snapshot(true));
           scrolls += 1;
           if (after.hash !== before) continue;
           // End of the list. If Jev was skipped on this screen, give it one look before failing.
@@ -543,7 +549,7 @@ export class Runner {
       }
 
       element = await this.avoidKeyboard(snap, element);
-      const { x, y } = center(element.bounds);
+      const { x, y } = tapPoint(snap, element);
       if (element.cls.startsWith("Web.")) {
         const native = hitsNativeUi(snap, x, y);
         if (native) {
@@ -603,8 +609,12 @@ export class Runner {
   /**
    * Wait for the screen to settle after an action. Fast drivers double-check stability; slow
    * ones (uiautomator dump) re-read only while the screen hasn't changed yet or is loading.
+   *
+   * `holdMs`: how long the screen (text with digits masked, and element positions) must stay
+   * unchanged. Counting identical reads isn't enough after a launch or URL open: Samsung
+   * Calculator's keypad slides in in stages and pauses ~300 ms between them.
    */
-  private async settle(prevHash: string | undefined, prevSettleHash?: string): Promise<UiSnapshot> {
+  private async settle(prevHash: string | undefined, prev?: UiSnapshot, holdMs = 0): Promise<UiSnapshot> {
     // Unless a confirmation read matches below, the returned screen is "unconfirmed": if the next
     // step can't find its target on it, act() re-reads once before asking Jev or scrolling.
     this.quickSettled = true;
@@ -613,6 +623,8 @@ export class Runner {
     const loadingDeadline = performance.now() + this.config.loadingTimeoutMs;
     let snap = await this.snapshot(true);
     let rereads = 0;
+    let stableSince = performance.now();
+    const same = (a: UiSnapshot, b: UiSnapshot) => a.settleHash === b.settleHash && a.layoutHash === b.layoutHash;
     for (;;) {
       if (isLoading(snap) && performance.now() < loadingDeadline) {
         await sleep(300);
@@ -623,11 +635,12 @@ export class Runner {
       if (this.driver.fastSnapshot) {
         // Same structure as before the action (only digits/values changed, e.g. a calculator key):
         // nothing is transitioning, so the confirmation read is skipped.
-        if (prevSettleHash && snap.settleHash === prevSettleHash) return snap;
-        // Otherwise require two identical reads in a row.
+        if (prev && holdMs === 0 && same(snap, prev)) return snap;
+        // Otherwise require two identical reads in a row (text and positions), `holdMs` apart at least.
         await sleep(100);
         const next = await this.snapshot(true);
-        if (next.settleHash === snap.settleHash) {
+        if (!same(next, snap)) stableSince = performance.now();
+        else if (performance.now() - stableSince >= holdMs) {
           this.quickSettled = false;
           return next;
         }
@@ -642,11 +655,26 @@ export class Runner {
     }
   }
 
+  /**
+   * A list can still be coasting after a swipe: re-read until two reads agree on element positions,
+   * so a tap doesn't land where the target was a moment ago. Fast drivers only (slow reads lag anyway).
+   */
+  private async holdStill(snap: UiSnapshot): Promise<UiSnapshot> {
+    if (!this.driver.fastSnapshot) return snap;
+    for (let i = 0; i < 8; i++) {
+      await sleep(80);
+      const next = await this.snapshot(true);
+      if (next.layoutHash === snap.layoutHash && next.settleHash === snap.settleHash) return next;
+      snap = next;
+    }
+    return snap;
+  }
+
   /** After any action: settle, handle permission dialogs, check crashes and (optionally) visible errors. */
-  private async afterAction(skipSettle = false): Promise<Outcome> {
+  private async afterAction(skipSettle = false, holdMs = 0): Promise<Outcome> {
     const prev = this.last?.hash;
-    const prevSettle = this.last?.settleHash;
-    let snap = skipSettle && this.fresh && this.last ? this.last : await this.settle(prev, prevSettle);
+    const before = this.last;
+    let snap = skipSettle && this.fresh && this.last ? this.last : await this.settle(prev, before, holdMs);
 
     const dialog = await this.handlePermissionDialog(snap);
     if (dialog) {

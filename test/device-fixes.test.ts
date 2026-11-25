@@ -188,3 +188,24 @@ describe("quick settle", () => {
     expect(dev.taps.at(-1)).toEqual([540, 1600]);
   });
 });
+
+describe("settling on sliding layouts", () => {
+  it("waits for element positions to stop moving after launch (keypad slides in and pauses)", async () => {
+    // C slides 871 → 513 (pause, two identical reads) → 76; % ends up where C paused.
+    const frames = [871, 513, 513, 76, 76, 76, 76];
+    let i = 0;
+    const at = (cx: number) =>
+      screen([
+        { text: "C", clickable: true, id: "clear", b: [cx, 1063, cx + 190, 1255] },
+        { text: "%", clickable: true, id: "pct", b: [566, 1063, 758, 1255] },
+      ]);
+    const dev = new FakeDriver(at(871));
+    dev.fastSnapshot = true;
+    dev.snapshot = async () => parseAndroidXml(at(frames[Math.min(i++, frames.length - 1)]!));
+    const r = await new Runner(dev, undefined, {
+      config: { ...FAST, settleMaxMs: 4_000, riskGuard: false, checkErrorsEveryStep: false },
+    }).start(parseFlow("app: com.example.shop\nsteps:\n  - launch\n  - tap: { id: clear }"));
+    expect(r.status).toBe("passed");
+    expect(dev.taps).toEqual([[171, 1159]]); // the final position, not the paused one (608)
+  });
+});

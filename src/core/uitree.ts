@@ -47,6 +47,8 @@ export interface UiSnapshot {
    * screen look unstable forever. Used only to decide when the screen has settled.
    */
   settleHash: string;
+  /** Positions of actionable elements (8 px grid): a sliding/animating layout changes this, not the text. */
+  layoutHash: string;
   /** Order-independent signature of actionable elements; used as a cache key. */
   fingerprint: string;
   screen: { width: number; height: number };
@@ -64,12 +66,19 @@ export function makeSnapshot(elements: UiElement[], packages: string[], screen: 
     ...new Set(
       elements
         .filter((e) => e.clickable || e.editable)
-        .map((e) => `${e.cls}|${idSuffix(e.resourceId)}|${e.text || e.desc}`)
+        // Structure, not content: what a field contains and changing numbers ("5 tabs", a result
+        // preview) shouldn't make the same screen look different to the replay cache.
+        .map((e) => `${e.cls}|${idSuffix(e.resourceId)}|${e.editable ? "" : (e.text || e.desc).replace(/\d+/g, "#")}`)
         .sort(),
     ),
   ].join("\n");
   const fingerprint = createHash("sha1").update(sig).digest("hex").slice(0, 12);
-  return { elements, packages, hash, settleHash, fingerprint, screen };
+  const layout = elements
+    .filter((e) => e.clickable || e.editable)
+    .map((e) => [e.bounds.left, e.bounds.top, e.bounds.right, e.bounds.bottom].map((v) => Math.round(v / 8)).join(","))
+    .join(";");
+  const layoutHash = createHash("sha1").update(layout).digest("hex").slice(0, 12);
+  return { elements, packages, hash, settleHash, layoutHash, fingerprint, screen };
 }
 
 const NEAR_GAP_PX = 24;

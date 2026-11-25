@@ -233,7 +233,8 @@ export class AndroidDriver implements Driver {
     if (await this.keyboardShown()) await this.adb.back();
   }
 
-  async launch(app: string) {
+  /** Wake the screen and make sure it isn't locked (a PIN/pattern lock needs the user). */
+  private async ensureAwakeAndUnlocked() {
     let state = await this.adb.screenState();
     if (!state.awake) {
       await this.adb.key("KEYCODE_WAKEUP");
@@ -248,10 +249,15 @@ export class AndroidDriver implements Driver {
         throw new Error("the phone is locked — unlock it (or set Screen lock to None/Swipe on the test phone) and retry");
       }
     }
+  }
+
+  async launch(app: string) {
+    await this.ensureAwakeAndUnlocked();
     await this.adb.launch(app);
   }
 
   async openUrl(url: string, app?: string) {
+    await this.ensureAwakeAndUnlocked();
     await this.adb.openUrl(url, app);
   }
 

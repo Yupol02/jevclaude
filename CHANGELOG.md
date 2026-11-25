@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **The repository runs JevClaude on itself in CI:** `.github/workflows/e2e-android.yml` boots an API 34 emulator on GitHub Actions and runs `examples/flows/ci-emulator-settings.yaml` without a Jev key. It passes in about 22 s.
+
+- **Web links show where they go** (`link to /wiki/List_of_largest_cities…`, path only: query strings and fragments are dropped). Chrome's auto-translate renames link text; the target stays the same.
+
+### Changed
+- **`expect:` passes at p ≥ 0.75 (was 0.80).** On a second phone (Galaxy S23 FE), correct Settings-search and Play Store screens scored 0.77–0.83 and were sent to Claude at 0.80. Wrong screens stayed at 0.01–0.19 on both phones.
+- **Exact selectors (`{ id: … }`, `{ text: … }`) never fall back to Jev.** On a translated page, Jev picked a "similar" link and the flow tapped the wrong one. They are searched and scrolled to deterministically, then fail plainly.
+- **The screen fingerprint ignores field contents and numbers,** so the replay cache keeps working when a counter, tab count or formula changes. On the S23 FE, a flow that needs 3 Jev calls had been making 6.
+
+### Fixed
+- **Exact text selectors match title + summary list rows.** A clickable row lifts its children's texts into one string ("Network & internet · Mobile, Wi-Fi, hotspot"), so `{ text: "Network & internet" }` never matched it. Found by the emulator run.
+- **Taps avoid nested controls.** A tap aimed at a container's centre hit Chrome's voice-search mic inside the search box; the tap point now moves sideways to a spot no inner clickable covers.
+- **After a launch or URL open, the screen must hold still for 0.7 s.** Samsung Calculator's keypad slides in, pauses ~300 ms, then moves again, so two identical reads weren't enough and the first key tap hit "%". Element positions now count towards "settled", not only text. Launches are about 0.7 s slower.
+- **After scrolling to find a target, the runner waits for the list to stop** before tapping. A fling still coasting made a Settings tap land on the row above "About phone".
+- **`open:` wakes the phone and checks that it is unlocked,** like `launch` does, instead of opening the URL behind the lock screen.
+- **UiAutomator2 port forwards are removed at the end of a run.** Each run left an `adb forward` behind; about 60 had piled up on the test phone.
+
 ## [0.4.0] — 2026-11-25
 
 ### Added

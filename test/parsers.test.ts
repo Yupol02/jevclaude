@@ -136,3 +136,18 @@ describe("selectors on title + summary rows", () => {
     expect(exactLabelMatch(rows, "Bluetooth, pairing", "tap")).toBeUndefined();
   });
 });
+
+describe("screen fingerprint", () => {
+  it("ignores what fields contain and changing numbers", () => {
+    const at = (formula: string, tabs: number) =>
+      parseAndroidXml(
+        `<?xml version='1.0' encoding='UTF-8'?><hierarchy rotation="0"><node class="android.widget.FrameLayout" package="p" bounds="[0,0][1080,2400]">` +
+          `<node class="android.widget.EditText" text="${formula}" resource-id="p:id/formula" clickable="true" package="p" bounds="[0,100][1080,300]"/>` +
+          `<node class="android.widget.ImageButton" content-desc="Show ${tabs} tabs" resource-id="p:id/tabs" clickable="true" package="p" bounds="[900,0][1080,90]"/>` +
+          `<node class="android.widget.Button" text="Clear" resource-id="p:id/clear" clickable="true" package="p" bounds="[0,1500][270,1700]"/>` +
+          `</node></hierarchy>`,
+      );
+    expect(at("", 5).fingerprint).toBe(at("12 × 7", 6).fingerprint);
+    expect(at("", 5).hash).not.toBe(at("12 × 7", 6).hash);
+  });
+});
