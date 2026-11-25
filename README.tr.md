@@ -1,6 +1,10 @@
 # JevClaude (Türkçe)
 
-**Claude Code için token yakmayan mobil uygulama testi. Android ve iOS'ta çalışır.**
+[![npm](https://img.shields.io/npm/v/jevclaude?color=cb3837&logo=npm)](https://www.npmjs.com/package/jevclaude)
+[![CI](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml/badge.svg)](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Claude Code için token yakmayan mobil uygulama testi.** Android gerçek telefonda doğrulandı; iOS (simülatör) desteği yazıldı ama henüz deneysel.
 
 Claude test akışını bir kez yazar. Yerel bir çalıştırıcı (runner) cihazı yönetir. Adım başına küçük kararları [TypeSafe Jev](https://docs.typesafe.ai) yaklaşık 200 ms'de verir:
 - hangi elemana dokunulacak

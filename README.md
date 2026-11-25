@@ -1,6 +1,12 @@
 # JevClaude
 
-**Mobile app testing for Claude Code that doesn't burn your tokens. Works on Android and iOS.**
+[![npm](https://img.shields.io/npm/v/jevclaude?color=cb3837&logo=npm)](https://www.npmjs.com/package/jevclaude)
+[![CI](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml/badge.svg)](https://github.com/Yupol02/jevclaude/actions/workflows/ci.yml)
+[![provenance](https://img.shields.io/badge/npm-provenance-2ea44f?logo=sigstore)](https://www.npmjs.com/package/jevclaude#provenance)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![node](https://img.shields.io/node/v/jevclaude)
+
+**Mobile app testing for Claude Code that doesn't burn your tokens.** Android is verified on a real phone; iOS (simulator) is implemented but still experimental.
 
 Claude writes a test flow once. A local runner drives the device. [TypeSafe Jev](https://docs.typesafe.ai), a small structured-decision model, makes the per-step calls in about 200 ms each:
 - which element to tap
