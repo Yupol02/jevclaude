@@ -74,10 +74,13 @@ export class Uia2Client {
     };
     this.session = v.sessionId ?? (v as Record<string, string>).sessionId;
     if (!this.session) throw new Error("UiAutomator2 server returned no session id");
+    // Don't let the server wait for the UI to go idle before each read (it waited up to the default
+    // 10 s on animations, e.g. a tap ripple): the runner checks stability itself with repeated reads.
+    await this.req("POST", `/session/${this.session}/appium/settings`, { settings: { waitForIdleTimeout: 0 } }).catch(() => {});
   }
 
   async source(): Promise<string> {
-    const v = await this.req("GET", `/session/${this.session}/source`);
+    const v = await this.req("GET", `/session/${this.session}/source`, undefined, 5_000);
     if (typeof v !== "string") throw new Error("UiAutomator2 source was not a string");
     return v;
   }
@@ -101,6 +104,35 @@ export class Uia2Client {
     const id = el.ELEMENT ?? el["element-6066-11e4-a52e-4f735466cecf"];
     if (!id) throw new Error("UiAutomator2 returned no element id");
     await this.req("POST", `/session/${this.session}/element/${id}/value`, { text, replace: false });
+  }
+
+  /** Tap through the server (~65 ms) instead of spawning `adb shell input tap` (~120 ms). */
+  async tap(x: number, y: number): Promise<void> {
+    await this.req("POST", `/session/${this.session}/appium/gestures/click`, { offset: { x: Math.round(x), y: Math.round(y) } }, 5_000);
+  }
+
+  async swipe(x1: number, y1: number, x2: number, y2: number, durationMs: number): Promise<void> {
+    const r = Math.round;
+    await this.req(
+      "POST",
+      `/session/${this.session}/actions`,
+      {
+        actions: [
+          {
+            type: "pointer",
+            id: "finger1",
+            parameters: { pointerType: "touch" },
+            actions: [
+              { type: "pointerMove", duration: 0, x: r(x1), y: r(y1) },
+              { type: "pointerDown", button: 0 },
+              { type: "pointerMove", duration: Math.max(50, durationMs), x: r(x2), y: r(y2) },
+              { type: "pointerUp", button: 0 },
+            ],
+          },
+        ],
+      },
+      durationMs + 5_000,
+    );
   }
 
   async stop(): Promise<void> {

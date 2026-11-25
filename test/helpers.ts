@@ -135,4 +135,5 @@ export const FAST = {
   assertTimeoutMs: 0,
   waitForTimeoutMs: 0,
   launchTimeoutMs: 0,
+  fastSettleMs: 0,
 };

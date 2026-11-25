@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] — 2026-11-25
+
+Found by testing stock Samsung apps (Calculator, Clock, Settings); all three example flows now pass 3/3.
+
+### Fixed
+- **Selected tabs or items can be tapped by description.** They are often not marked clickable, so "the Stopwatch tab" found nothing when that tab was already selected.
+- **Running timers, clocks and counters no longer stall the runner.** Settling compared full screen text, so a ticking number kept the screen "unstable" until the cap after every action. Settling now ignores digits (`settleHash`); the worst stopwatch step went from 26 s to about 3 s.
+
+### Changed: speed, about 2× faster per run on stock apps
+- UiAutomator2 sessions set `waitForIdleTimeout: 0`. The server no longer waits for animations before each read; the runner's stability check (two identical reads, digits ignored) does that job. Average read time went from 283 ms to 125 ms.
+- Settle sleep on fast drivers is 100 ms (`fast_settle_ms`) instead of 350 ms.
+- New `error_check: auto` (default) asks Jev whether an error is visible only when error-like text or a dialog is on screen. `always` restores the old per-action check.
+- The keyboard probe only runs after a text field was used. Crash logs are read on a failing step and at the end, instead of after every step.
+- If the UiAutomator2 server stops answering mid-run (e.g. after a USB reconnect), it is restarted once, or the run falls back to `uiautomator dump`. Before, every read waited for a timeout (one run took 92 s).
+- **Taps and swipes go through the UiAutomator2 server** (`gestures/click`, W3C actions; ~65 ms vs ~120 ms for `adb shell input`), with adb as fallback.
+- **The confirmation read is skipped** when the first read after an action shows the same structure as before (only digits changed). If the next step can't find its target on such an unconfirmed screen, the runner re-reads once before asking Jev or scrolling.
+- **UiAutomator2 startup is retried once** after stopping a stale server (seen after USB reconnects).
+- Results: calculator 13.7–14.9 s → 5.1–5.9 s; stopwatch 13.9–15.5 s → 5.7–6.2 s; Settings search 14.7–15.9 s → 6.4–7.0 s; Settings with 3 scrolls 13.7 s → 6.5–7.3 s.
+
+### Added
+- `examples/flows/samsung-calculator.yaml` and `examples/flows/samsung-stopwatch.yaml`; neither leaves data behind.
+
+### Removed
+- The demo GIF, which showed screens of a private app.
+
 ## [0.2.3] — 2026-11-25
 
 Bugs and gaps found by testing a real Jetpack Compose app on a Galaxy S22 Ultra; JevClaude vs plain Claude Code numbers are in the README.

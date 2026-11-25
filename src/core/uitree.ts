@@ -42,6 +42,11 @@ export interface UiSnapshot {
   packages: string[];
   /** Hash of the compact representation; equal hashes ⇒ screen considered unchanged. */
   hash: string;
+  /**
+   * Like `hash` but with digits masked, so a running timer, clock or counter doesn't make the
+   * screen look unstable forever. Used only to decide when the screen has settled.
+   */
+  settleHash: string;
   /** Order-independent signature of actionable elements; used as a cache key. */
   fingerprint: string;
   screen: { width: number; height: number };
@@ -54,6 +59,7 @@ export function makeSnapshot(elements: UiElement[], packages: string[], screen: 
   annotateNear(elements);
   const compact = elements.map(describeElement).join("\n");
   const hash = createHash("sha1").update(compact).digest("hex").slice(0, 12);
+  const settleHash = createHash("sha1").update(compact.replace(/\d/g, "#")).digest("hex").slice(0, 12);
   const sig = [
     ...new Set(
       elements
@@ -63,7 +69,7 @@ export function makeSnapshot(elements: UiElement[], packages: string[], screen: 
     ),
   ].join("\n");
   const fingerprint = createHash("sha1").update(sig).digest("hex").slice(0, 12);
-  return { elements, packages, hash, fingerprint, screen };
+  return { elements, packages, hash, settleHash, fingerprint, screen };
 }
 
 const NEAR_GAP_PX = 24;
@@ -155,7 +161,7 @@ export function findBySelector(snap: UiSnapshot, sel: Selector): UiElement[] {
  */
 export function exactLabelMatch(snap: UiSnapshot, target: string, kind: "tap" | "type"): UiElement | undefined {
   const t = target.trim().toLocaleLowerCase();
-  const actionable = snap.elements.filter((el) => (kind === "type" ? el.editable : el.clickable || el.editable));
+  const actionable = snap.elements.filter((el) => (kind === "type" ? el.editable : el.clickable || el.editable || el.selected));
   const hits = actionable.filter((el) =>
     [el.text, el.desc, el.childText, idSuffix(el.resourceId)].some((v) => v && v.toLocaleLowerCase() === t),
   );
@@ -185,4 +191,17 @@ export function isLoading(snap: UiSnapshot): boolean {
 export function screenContains(snap: UiSnapshot, needle: string): boolean {
   const n = needle.toLocaleLowerCase();
   return snap.elements.some((el) => `${el.text}\n${el.desc}\n${el.childText}`.toLocaleLowerCase().includes(n));
+}
+
+const ERROR_HINT =
+  /\b(error|errors|failed|failure|exception|went wrong|try again|retry|not responding|isn't responding|unable to|cannot|can't|invalid|denied|offline|no internet|no connection|timed? ?out)\b|hata|başarısız|tekrar dene|yeniden dene|yanıt vermiyor|durduruldu|geçersiz|bağlantı (yok|kesildi)|internet yok|reddedildi/i;
+const DIALOG_CLASS = /^(Alert|AlertDialog|Dialog|Sheet)$/i;
+
+/**
+ * Cheap gate for the "is an error visible?" Jev question: true when some text looks like an error
+ * message, or an alert/dialog is on screen. Field hints such as "can't be empty" also match, so Jev
+ * still makes the final call.
+ */
+export function looksLikeError(snap: UiSnapshot): boolean {
+  return snap.elements.some((el) => DIALOG_CLASS.test(el.cls) || ERROR_HINT.test(`${el.text}\n${el.desc}`));
 }

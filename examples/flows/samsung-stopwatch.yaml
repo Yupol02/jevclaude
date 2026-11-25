@@ -1,0 +1,18 @@
+# Start, stop and reset the stopwatch, then go back to the Alarm tab (leaves the app as it was).
+name: samsung clock stopwatch
+app: com.sec.android.app.clockpackage
+platform: android
+fresh_start: true
+steps:
+  - launch
+  - tap: "the Stopwatch tab"
+  - if_visible: "Sıfırla" # clean up a stopwatch left paused by an earlier run
+    then: [{ tap: "the reset button" }]
+  - tap: "the start button"
+  - wait: 1500
+  - tap: "the stop button"
+  - see: "Sürdür" # the Resume button only exists while paused
+  - tap: "the reset button"
+  - see: "Başlat" # back to the initial Start button
+  - tap: "the Alarm tab"
+  - see: "Alarm ekle"

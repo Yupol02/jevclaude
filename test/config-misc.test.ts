@@ -78,11 +78,24 @@ describe("runner extras", () => {
     expect(r.steps[0]!.detail).toMatch(/top options: "Log in" 0\.40/);
   });
 
-  it("fails a step when Jev sees an error after an action", async () => {
+  it("fails a step when Jev sees an error after an action (errorCheck: always)", async () => {
     const jev = new FakeJev((q) => (q === "error" ? yes(0.97) : yes(0.01)));
-    const r = await new Runner(new FakeDriver(LOGIN), jev, { config: FAST }).start(flow(`  - back`));
+    const r = await new Runner(new FakeDriver(LOGIN), jev, { config: { ...FAST, errorCheck: "always" } }).start(flow(`  - back`));
     expect(r.status).toBe("failed");
     expect(r.steps[0]!.detail).toMatch(/error visible/);
+  });
+
+  it("errorCheck auto asks Jev only when the screen shows an error hint", async () => {
+    const quiet = new FakeJev(() => yes(0.97));
+    const ok = await new Runner(new FakeDriver(LOGIN), quiet, { config: { ...FAST, riskGuard: false } }).start(flow(`  - back`));
+    expect(ok.status).toBe("passed");
+    expect(quiet.asked("error")).toBe(0);
+
+    const errScreen = LOGIN.replace("Welcome back", "Bağlantı hatası, tekrar deneyin");
+    const loud = new FakeJev(() => yes(0.97));
+    const bad = await new Runner(new FakeDriver(errScreen), loud, { config: { ...FAST, riskGuard: false } }).start(flow(`  - back`));
+    expect(loud.asked("error")).toBe(1);
+    expect(bad.status).toBe("failed");
   });
 
   it("runs keys, swipes, waits, stop and launch", async () => {

@@ -210,12 +210,21 @@ describe("Runner: flow control and offline use", () => {
     expect(dev.keys).toEqual([]);
   });
 
-  it("detects crashes deterministically", async () => {
+  it("detects crashes deterministically: on a failing step, and at the end of the run", async () => {
     const dev = new FakeDriver(LOGIN);
     dev.crashes = ["FATAL EXCEPTION: main\nProcess: com.example.shop"];
-    const r = await new Runner(dev, undefined, { config: offline }).start(flow(`  - tap: { id: btn_login }`));
+    // a step that fails gets the crash as its reason
+    const r = await new Runner(dev, undefined, { config: offline }).start(flow(`  - see: "Home"`));
     expect(r.status).toBe("failed");
     expect(r.steps[0]!.detail).toMatch(/^crash/);
+    // a run whose steps all passed is still failed by a crash found at the end
+    const r2 = await new Runner(new FakeDriver(LOGIN), undefined, { config: offline }).start(flow(`  - tap: { id: btn_login }`));
+    expect(r2.status).toBe("passed");
+    const crashing = new FakeDriver(LOGIN);
+    crashing.crashes = dev.crashes;
+    const r3 = await new Runner(crashing, undefined, { config: offline }).start(flow(`  - tap: { id: btn_login }`));
+    expect(r3.status).toBe("failed");
+    expect(r3.crashes[0]).toMatch(/FATAL/);
   });
 
   it("works fully offline with exact selectors", async () => {

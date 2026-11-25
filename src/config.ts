@@ -29,7 +29,9 @@ export const ConfigSchema = z
         risk_block: prob.optional(),
         risk_guard: z.boolean().optional(),
         check_errors_every_step: z.boolean().optional(),
+        error_check: z.enum(["auto", "always"]).optional(),
         settle_ms: z.number().int().min(0).optional(),
+        fast_settle_ms: z.number().int().min(0).optional(),
         assert_timeout_ms: z.number().int().min(0).optional(),
         wait_for_timeout_ms: z.number().int().min(0).optional(),
         max_scrolls: z.number().int().min(0).max(30).optional(),
@@ -61,6 +63,8 @@ export function runnerConfigFrom(cfg: Config): Partial<RunnerConfig> {
   if (r.risk_guard !== undefined) out.riskGuard = r.risk_guard;
   if (r.check_errors_every_step !== undefined) out.checkErrorsEveryStep = r.check_errors_every_step;
   if (r.settle_ms !== undefined) out.settleMs = r.settle_ms;
+  if (r.fast_settle_ms !== undefined) out.fastSettleMs = r.fast_settle_ms;
+  if (r.error_check !== undefined) out.errorCheck = r.error_check;
   if (r.assert_timeout_ms !== undefined) out.assertTimeoutMs = r.assert_timeout_ms;
   if (r.wait_for_timeout_ms !== undefined) out.waitForTimeoutMs = r.wait_for_timeout_ms;
   if (r.max_scrolls !== undefined) out.maxScrolls = r.max_scrolls;
@@ -78,6 +82,7 @@ runner:
   fail: ${DEFAULT_CONFIG.fail}                # at or below ⇒ failed; between ⇒ uncertain (Claude decides)
   risk_block: ${DEFAULT_CONFIG.riskBlock}           # block tap/type at or above this risk
   max_scrolls: ${DEFAULT_CONFIG.maxScrolls}            # swipes while searching for a target
+  error_check: auto         # auto: ask Jev about errors only when an error hint is on screen · always: every action
 cache: on                   # on | off | update — replay cache in .jevclaude/cache
 reports_dir: reports
 `;

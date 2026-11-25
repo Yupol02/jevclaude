@@ -1,0 +1,16 @@
+# 12 × 7 without pressing "=" (so nothing is added to the calculator history).
+name: samsung calculator 12 x 7
+app: com.sec.android.app.popupcalculator
+platform: android
+fresh_start: true
+steps:
+  - launch
+  - tap: "the clear (C) key"
+  - tap: { id: calc_keypad_btn_01 }
+  - tap: { id: calc_keypad_btn_02 }
+  - tap: "the multiplication key"
+  - tap: "the seven key"
+  - expect: "The result preview shows 84"
+  - see: "84"
+  - tap: "the clear (C) key"
+  - not_see: "84"

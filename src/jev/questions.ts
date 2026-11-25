@@ -18,7 +18,8 @@ export function screenState(snap: UiSnapshot, extra: Record<string, JSONValue> =
 }
 
 export function candidatesFor(snap: UiSnapshot, kind: "tap" | "type"): UiElement[] {
-  const pool = snap.elements.filter((el) => el.enabled && (kind === "type" ? el.editable : el.clickable || el.editable));
+  // Selected tabs/items are often not marked clickable, but tapping them is still a valid (no-op) action.
+  const pool = snap.elements.filter((el) => el.enabled && (kind === "type" ? el.editable : el.clickable || el.editable || el.selected));
   // Fall back to every labelled element: some apps put the click handler on a non-clickable view.
   const list = pool.length > 0 ? pool : snap.elements.filter((el) => el.text || el.desc);
   return list.slice(0, MAX_CHOICE_OPTIONS - 1); // one slot is reserved for "none"

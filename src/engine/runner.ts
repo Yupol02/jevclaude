@@ -5,6 +5,7 @@ import {
   findBySelector,
   isLoading,
   labelOf,
+  looksLikeError,
   screenContains,
   type UiElement,
   type UiSnapshot,
@@ -36,8 +37,15 @@ export interface RunnerConfig {
   riskGuard: boolean;
   /** Ask Jev whether an error is visible after every action. */
   checkErrorsEveryStep: boolean;
+  /**
+   * "auto": ask Jev about visible errors only when the screen shows an error hint (error/failed/
+   * hata/… text or an alert dialog); "always": after every action (slower, ~0.25 s per step).
+   */
+  errorCheck: "auto" | "always";
   /** Wait after an action before reading the screen. */
   settleMs: number;
+  /** Settle wait for fast drivers (UiAutomator2 / WebDriverAgent), which double-check stability anyway. */
+  fastSettleMs: number;
   /** Upper bound for waiting until the screen stops changing. */
   settleMaxMs: number;
   /** How long to wait while a progress indicator is visible. */
@@ -61,7 +69,9 @@ export const DEFAULT_CONFIG: RunnerConfig = {
   riskBlock: 0.5,
   riskGuard: true,
   checkErrorsEveryStep: true,
+  errorCheck: "auto",
   settleMs: 350,
+  fastSettleMs: 100,
   settleMaxMs: 4_000,
   loadingTimeoutMs: 15_000,
   assertTimeoutMs: 6_000,
@@ -138,6 +148,10 @@ export class Runner {
   private queue: Step[] = [];
   private results: StepResult[] = [];
   private allowRiskyNext = false;
+  /** Set after we typed or tapped a text field; only then is it worth asking whether the keyboard is up. */
+  private keyboardMaybeUp = false;
+  /** The current snapshot was accepted without a confirmation read (screen looked unchanged). */
+  private quickSettled = false;
   private last?: UiSnapshot;
   /** `last` reflects the current screen (no action since it was taken). */
   private fresh = false;
@@ -269,6 +283,11 @@ export class Runner {
     } catch (err) {
       out = new Outcome("failed", "none", `error: ${(err as Error).message}`);
     }
+    if (out.status !== "passed") {
+      // Crash logs are read only when something went wrong (and once at the end), not after every step.
+      const crashes = await this.driver.crashLogs(this.flow!.app).catch(() => []);
+      if (crashes.length) out = new Outcome("failed", "deterministic", `crash: ${crashes[0]!.split("\n")[0]}`);
+    }
     const result: StepResult = {
       index: this.results.length,
       step: label,
@@ -289,15 +308,18 @@ export class Runner {
     const flow = this.flow!;
     if (step === "launch") return this.launch(flow.app);
     if (step === "stop") {
+      this.keyboardMaybeUp = false;
       await this.driver.stop(flow.app);
       this.invalidate();
       return new Outcome("passed", "deterministic");
     }
     if (step === "back") {
+      this.keyboardMaybeUp = false;
       await this.driver.back();
       return this.afterAction();
     }
     if (step === "hide_keyboard") {
+      this.keyboardMaybeUp = false;
       await this.driver.hideKeyboard();
       return this.afterAction();
     }
@@ -348,6 +370,7 @@ export class Runner {
   }
 
   private async launch(app: string): Promise<Outcome> {
+    this.keyboardMaybeUp = false;
     await this.driver.launch(app);
     this.invalidate();
     // Cold starts can take a few seconds: poll the (cheap) foreground check before reading the screen.
@@ -408,6 +431,13 @@ export class Runner {
         }
       }
 
+      if (!element && this.quickSettled) {
+        // The previous action was accepted on a single read; the screen may have changed since.
+        this.quickSettled = false;
+        await sleep(150);
+        await this.snapshot(true);
+        continue;
+      }
       const canScrollMore = scroll && !exhausted && scrolls < this.config.maxScrolls && snap.elements.some((e) => e.scrollable);
       // With a cache entry we know what to look for: search intermediate screens deterministically and
       // ask Jev (to heal) only on the first screen and once scrolling is exhausted.
@@ -488,6 +518,7 @@ export class Runner {
       const { x, y } = center(element.bounds);
       await this.driver.tap(x, y);
       this.invalidate();
+      if (element.editable) this.keyboardMaybeUp = true;
       if (kind === "type" && typing) {
         const text = interpolate(typing.text, this.env);
         if (!this.driver.unicodeInput && /[^\x20-\x7e]/.test(text)) {
@@ -517,11 +548,12 @@ export class Runner {
    * keyboard: hide it first and re-locate the same element (its position may move).
    */
   private async avoidKeyboard(snap: UiSnapshot, element: UiElement): Promise<UiElement> {
-    if (!this.driver.keyboardShown || !snap.screen.height) return element;
+    if (!this.keyboardMaybeUp || !this.driver.keyboardShown || !snap.screen.height) return element;
     if (center(element.bounds).y < snap.screen.height * 0.5) return element;
     if (!(await this.driver.keyboardShown())) return element;
     const selector = uniqueSelector(snap, element);
     await this.driver.hideKeyboard();
+    this.keyboardMaybeUp = false;
     await sleep(this.config.settleMs);
     const fresh = await this.snapshot(true);
     const hits = selector ? findBySelector(fresh, selector) : [];
@@ -533,8 +565,11 @@ export class Runner {
    * Wait for the screen to settle after an action. Fast drivers double-check stability; slow
    * ones (uiautomator dump) re-read only while the screen hasn't changed yet or is loading.
    */
-  private async settle(prevHash: string | undefined): Promise<UiSnapshot> {
-    await sleep(this.config.settleMs);
+  private async settle(prevHash: string | undefined, prevSettleHash?: string): Promise<UiSnapshot> {
+    // Unless a confirmation read matches below, the returned screen is "unconfirmed": if the next
+    // step can't find its target on it, act() re-reads once before asking Jev or scrolling.
+    this.quickSettled = true;
+    await sleep(this.driver.fastSnapshot ? this.config.fastSettleMs : this.config.settleMs);
     const deadline = performance.now() + this.config.settleMaxMs;
     const loadingDeadline = performance.now() + this.config.loadingTimeoutMs;
     let snap = await this.snapshot(true);
@@ -547,10 +582,16 @@ export class Runner {
       }
       if (performance.now() > deadline) return snap;
       if (this.driver.fastSnapshot) {
-        // Cheap reads: require two identical reads in a row.
-        await sleep(150);
+        // Same structure as before the action (only digits/values changed, e.g. a calculator key):
+        // nothing is transitioning, so the confirmation read is skipped.
+        if (prevSettleHash && snap.settleHash === prevSettleHash) return snap;
+        // Otherwise require two identical reads in a row.
+        await sleep(100);
         const next = await this.snapshot(true);
-        if (next.hash === snap.hash) return next;
+        if (next.settleHash === snap.settleHash) {
+          this.quickSettled = false;
+          return next;
+        }
         snap = next;
         continue;
       }
@@ -565,7 +606,8 @@ export class Runner {
   /** After any action: settle, handle permission dialogs, check crashes and (optionally) visible errors. */
   private async afterAction(skipSettle = false): Promise<Outcome> {
     const prev = this.last?.hash;
-    let snap = skipSettle && this.fresh && this.last ? this.last : await this.settle(prev);
+    const prevSettle = this.last?.settleHash;
+    let snap = skipSettle && this.fresh && this.last ? this.last : await this.settle(prev, prevSettle);
 
     const dialog = await this.handlePermissionDialog(snap);
     if (dialog) {
@@ -573,9 +615,8 @@ export class Runner {
       snap = await this.settle(snap.hash);
     }
 
-    const crashes = await this.driver.crashLogs(this.flow!.app).catch(() => []);
-    if (crashes.length) return new Outcome("failed", "deterministic", `crash: ${crashes[0]!.split("\n")[0]}`);
     if (!this.config.checkErrorsEveryStep || !this.jev) return new Outcome("passed", "deterministic");
+    if (this.config.errorCheck === "auto" && !looksLikeError(snap)) return new Outcome("passed", "deterministic");
     const res = await this.jev.ask(afterActionRequest(snap, { checkErrors: true }));
     const p = noul(res.answers.error);
     if (p >= this.config.pass) return new Outcome("failed", "jev", `error visible on screen (p=${p.toFixed(2)})`, { probability: p });

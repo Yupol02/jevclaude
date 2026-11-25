@@ -24,18 +24,28 @@ export type AndroidBackend = "auto" | "uia2" | "adb";
 export class AndroidDriver implements Driver {
   readonly platform = "android" as const;
   private uia2?: Uia2Client;
+  private log: (m: string) => void = () => {};
   private recorder?: ChildProcess;
 
   private constructor(private readonly adb: Adb) {}
 
   static async connect(serial: string, backend: AndroidBackend = "auto", log: (m: string) => void = () => {}): Promise<AndroidDriver> {
     const d = new AndroidDriver(new Adb(serial));
+    d.log = log;
     if (backend !== "adb") {
       const installed = await Uia2Client.isInstalled(d.adb).catch(() => false);
       if (installed) {
-        const c = new Uia2Client(d.adb);
+        let c = new Uia2Client(d.adb);
         try {
-          await c.start();
+          try {
+            await c.start();
+          } catch {
+            // A stale instrumentation (e.g. after a USB reconnect) can block a fresh start: stop it, retry once.
+            await c.stop().catch(() => {});
+            await stopUia2Server(d.adb);
+            c = new Uia2Client(d.adb);
+            await c.start();
+          }
           d.uia2 = c;
         } catch (e) {
           if (backend === "uia2") throw e;
@@ -67,8 +77,18 @@ export class AndroidDriver implements Driver {
     if (this.uia2) {
       try {
         return parseAndroidXml(await this.uia2.source());
-      } catch {
-        /* server may have died (e.g. app restart); fall back for this read */
+      } catch (e) {
+        // The server dies when USB drops or the instrumentation is killed. Restart it once; if that
+        // fails, use uiautomator dump for the rest of the run instead of timing out on every read.
+        try {
+          await this.uia2.start();
+          return parseAndroidXml(await this.uia2.source());
+        } catch {
+          this.log(`UiAutomator2 server stopped answering (${(e as Error).message.slice(0, 80)}); switching to uiautomator dump`);
+          await this.uia2.stop().catch(() => {});
+          this.uia2 = undefined;
+          await stopUia2Server(this.adb);
+        }
       }
     }
     try {
@@ -82,10 +102,24 @@ export class AndroidDriver implements Driver {
   }
 
   async tap(x: number, y: number) {
+    if (this.uia2) {
+      try {
+        return await this.uia2.tap(x, y);
+      } catch {
+        /* fall back to adb below */
+      }
+    }
     await this.adb.tap(x, y);
   }
 
   async swipe(x1: number, y1: number, x2: number, y2: number, durationMs = 300) {
+    if (this.uia2) {
+      try {
+        return await this.uia2.swipe(x1, y1, x2, y2, durationMs);
+      } catch {
+        /* fall back to adb below */
+      }
+    }
     await this.adb.swipe(x1, y1, x2, y2, durationMs);
   }
 

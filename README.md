@@ -16,6 +16,8 @@ Claude writes a test flow once. A local runner drives the device. [TypeSafe Jev]
 
 A replay cache makes re-runs model-free. Claude only hears back when something fails or Jev isn't sure, and it can then decide and **resume the run where it stopped**.
 
+![JevClaude running a 10-step flow on the stock Samsung Calculator: 10/10 passed, 3 Jev calls](docs/demo.gif)
+
 
 ```
 Claude Code ──(MCP: run_flow / resume_flow)──▶ Runner ──▶ Driver
@@ -200,6 +202,52 @@ What this does and doesn't show:
 - **The sample is small.** One app, one task, 3 runs each.
 - **JevClaude ran on the slow backend** (~2.3 s per screen read). The UiAutomator2 backend couldn't type into Compose fields until 0.2.3. With it, a 19-step version of the same form, filled but not saved, now takes 26–33 s. The create flow hasn't been re-measured on it.
 - **Plain Claude made a mistake.** In C1 it opened a different event by accident; it only looked and went back. It also had taps land under the on-screen keyboard. 0.2.3 hides the keyboard before such taps.
+
+### Stock apps (Samsung, Turkish UI)
+
+Each flow was run 3 times on the same phone with the UiAutomator2 backend. Run 1 has a cold cache; runs 2–3 are warm. None of them leaves data behind: the calculator never presses "=", so nothing goes into its history, and the stopwatch is reset and the app returned to its Alarm tab.
+
+| Flow | Passed | Time | Jev calls | Tokens | Cost / run |
+|---|---|---|---|---|---|
+| [samsung-calculator.yaml](examples/flows/samsung-calculator.yaml): 12 × 7, check the preview shows 84 | 3/3 | 13.7–14.9 s | 10–13 | 10–16 k | ≈ $0.0004–0.0007 |
+| [samsung-stopwatch.yaml](examples/flows/samsung-stopwatch.yaml): start, stop, reset, back to Alarm | 3/3 | 13.9–15.5 s | 6–11 | 4.5–10 k | ≈ $0.0002–0.0004 |
+| [settings-search-unicode.yaml](examples/flows/settings-search-unicode.yaml): search Settings for `parlaklık` | 3/3 | 14.7–15.9 s | 6–8 | 4.6–6.7 k | ≈ $0.0002–0.0003 |
+
+#### Speed work: about 2× faster per run
+
+Profiling the calculator run (13.9 s) showed that most of the time went to waiting and checking, not to deciding:
+
+| Where the time went (before) | | Change |
+|---|---|---|
+| UiAutomator2 waited for the UI to go idle before every read | 283 ms/read | `waitForIdleTimeout: 0`; the runner checks stability itself (two identical reads, digits ignored) |
+| Fixed settle sleep after every action | 350 ms | 100 ms on fast drivers (`fast_settle_ms`) |
+| "Is an error visible?" Jev call after every action | ~240 ms each | `error_check: auto` asks only when error-like text (error, failed, hata, tekrar dene, …) or a dialog is on screen; `always` keeps the old behaviour |
+| Keyboard probe (`dumpsys input_method`) before taps in the lower half | ~250 ms each | only after a text field was tapped or typed into |
+| `logcat` crash check after every step | ~90 ms each | on a failing step and once at the end |
+| Taps and swipes through `adb shell input` | ~120 ms per tap | through the UiAutomator2 server (`gestures/click`, W3C actions): ~65 ms; adb as fallback |
+| A confirmation read after every action | ~125 ms | skipped when the first read shows the same structure as before the action (only digits changed, e.g. a calculator key). If the next target is then missing, the screen is re-read once before Jev or scrolling is involved |
+
+Results with a warm cache, 3 runs each, same phone:
+
+| Flow | Before | Round 1 | Round 2 (taps via server, quick settle) | Jev calls before → after |
+|---|---|---|---|---|
+| samsung-calculator | 13.7–14.9 s | 5.7–7.4 s | **5.1–5.9 s** | 10 → 3 |
+| samsung-stopwatch (includes a 1.5 s `wait`) | 13.9–15.5 s | 6.2–6.5 s | **5.7–6.2 s** | 6 → 0 |
+| settings-search-unicode | 14.7–15.9 s | 6.6–7.7 s | **6.4–7.0 s** | 6 → 1 |
+| settings-smoke (3 scrolls) | 13.7 s | — | **6.5–7.3 s** | 6 → 3 |
+
+**Round 2 reliability.** Round 2 counted 18 passes in 21 runs. The other 3 runs, plus one 19.5 s outlier, coincided with USB reconnects: adb's `transport_id` went from 9 to 29 during the session. A reconnect kills the UiAutomator2 server. The driver now retries the start once, then falls back to `uiautomator dump`, but the dump can't type Unicode, so those runs stop with a clear error. With a stable cable, 6 back-to-back calculator runs all passed in 5.5–5.7 s.
+
+Two notes on this run:
+- **Step time is now mostly the device.** About 0.5 s per step goes to the screen read (~125 ms), the tap (~65 ms) and the app's own reaction. Jev is involved only on cache misses, risk checks and `expect:`.
+- **A dead UiAutomator2 server slowed every read.** One stopwatch run right after a USB reconnect took 92 s, because the server had died and each read timed out before falling back. The driver now restarts the server once, or switches to `uiautomator dump` for the rest of the run. Killing the server mid-run on purpose now costs about 1 s; the run still passed in 5.8 s.
+- **The real-app comparison above predates these changes.** It was also measured on the slow adb backend, so it hasn't been re-run with them.
+
+These pass rates came after fixes. The first attempts surfaced two JevClaude bugs and two badly written flow steps:
+- **Bug: selected tabs.** A tab that is already selected isn't marked clickable, so "the Stopwatch tab" found nothing. Fixed: selected elements are now tap candidates.
+- **Bug: running timers.** A running timer changes the screen on every read, so the runner waited for its settle cap after every action, up to 26 s for one step. Fixed: settling ignores digits; the worst step is now about 3 s.
+- **Flow wording: two claims in one `expect`.** "shows 12×7 and 84" scored 0.70–0.76 because the app writes "12 Çarpı 7". One claim ("the preview shows 84") passes.
+- **Flow wording: number comparisons.** "stopped and shows a time greater than zero" scored 0.73–0.83 on a correct screen. Even "The stopwatch is paused" scored only 0.80–0.83. `see: "Sürdür"`, the Resume button that only exists while paused, is exact. When a state has a visible label, check the label.
 
 ### Measured so far: Android Settings
 
