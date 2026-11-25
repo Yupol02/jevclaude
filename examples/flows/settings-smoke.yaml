@@ -1,11 +1,11 @@
-# Works on any Android phone: open Settings → About phone.
+# Works on any Android phone (any language / vendor skin): open Settings → About phone.
 name: android settings smoke
 app: com.android.settings
 platform: android
 fresh_start: true
 steps:
   - launch
-  - expect: "The Android Settings main list is shown"
-  - tap: "the About phone / About device entry" # scrolls until it finds it
-  - expect: "A screen with information about the phone (model, Android version or similar)"
+  - expect: "The phone's Settings app is open on its main list of settings categories"
+  - tap: "the About phone / phone information entry (usually the last item in Settings)" # scrolls until it finds it
+  - expect: "A screen with information about the phone, such as its model name or software version"
   - back

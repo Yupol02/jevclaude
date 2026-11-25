@@ -84,8 +84,35 @@ export class Adb {
     return this.key("KEYCODE_BACK");
   }
 
+  /** Start the app's launcher activity (am start -W waits for it); falls back to monkey. */
   async launch(pkg: string): Promise<void> {
-    await this.shell(["monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"]);
+    const resolved = await this.shell([
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
+      "-c",
+      "android.intent.category.LAUNCHER",
+      pkg,
+    ]).catch(() => "");
+    const component = resolved
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.startsWith(`${pkg}/`));
+    if (component) {
+      await this.shell(["am", "start", "-W", "-n", component], 30_000);
+    } else {
+      await this.shell(["monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"]);
+    }
+  }
+
+  /** Screen on/off and keyguard state. */
+  async screenState(): Promise<{ awake: boolean; locked: boolean }> {
+    const power = await this.shell(["dumpsys", "power"]).catch(() => "");
+    const awake = /mWakefulness=Awake/.test(power) || !/mWakefulness=/.test(power);
+    const win = await this.shell(["dumpsys", "window"]).catch(() => "");
+    const locked = /mDreamingLockscreen=true|isKeyguardShowing=true|mShowingLockscreen=true|keyguardShowing=true/i.test(win);
+    return { awake, locked };
   }
 
   async forceStop(pkg: string): Promise<void> {

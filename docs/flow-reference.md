@@ -69,5 +69,6 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
 - **Exact selectors are free.** When you know an id or exact text (from the app's source), use `{ id: ... }` or `see:`.
 - **Use natural language** for targets whose text changes, or that you can only describe ("the first product card").
 - **Check numbers with `see:`.** Jev is weak at counting and arithmetic.
+- **Describe what must be true, not where it is.** Jev reads literally: "results under the search field" fails on a phone whose search bar is at the bottom.
 - **Keep `expect:` to one checkable claim.** "Home screen with the user's name at the top" is good. "Everything looks right" is not.
 - **Commit `.jevclaude/cache/`** so CI re-runs need no model calls for element picks.

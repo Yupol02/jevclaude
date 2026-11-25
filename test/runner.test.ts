@@ -83,6 +83,34 @@ describe("Runner: resolution layers", () => {
     expect(r.steps[0]!.scrolls).toBe(1);
     expect(dev.taps).toEqual([[540, 2050]]);
   });
+  it("with a cache entry, scrolls deterministically and asks Jev only on the first screen", async () => {
+    let page = 0;
+    const pages = (n: number) =>
+      screen([
+        { cls: "RecyclerView", scrollable: true, b: [0, 0, 1080, 2400] },
+        { text: `Row ${n}`, clickable: true, b: [0, 100, 1080, 200] },
+        ...(n === 3 ? [{ text: "About phone", clickable: true, b: [0, 2000, 1080, 2100] as [number, number, number, number] }] : []),
+      ]);
+    const dev = new FakeDriver(pages(0));
+    dev.onSwipe = (d) => {
+      page += 1;
+      d.current = pages(page);
+    };
+    const cache = tmpCache();
+    cache.set(SelectorCache.key("tap", "about entry"), {
+      selector: { text: "About phone" },
+      label: "About phone",
+      fingerprint: "x",
+      risk: 0.01,
+    });
+    const jev = new FakeJev((q) => (q === "pick" ? pick("none", 0.9) : yes(0.01)));
+    const r = await new Runner(dev, jev, { config: FAST, cache }).start(flow(`  - tap: "about entry"`));
+    expect(r.status).toBe("passed");
+    expect(r.steps[0]).toMatchObject({ decidedBy: "cache", scrolls: 3 });
+    // one Jev request on the first screen (pick + risk together); screens 2–4 are searched without Jev
+    expect(jev.asked("pick")).toBe(1);
+    expect(jev.requests.filter((q) => "pick" in q.questions || "risk" in q.questions)).toHaveLength(1);
+  });
 });
 
 describe("Runner: guards and decisions", () => {

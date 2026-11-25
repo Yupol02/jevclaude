@@ -48,6 +48,8 @@ export interface RunnerConfig {
   waitForTimeoutMs: number;
   /** Max swipes while searching for a tap/type target. */
   maxScrolls: number;
+  /** How long launch waits for the app to reach the foreground. */
+  launchTimeoutMs: number;
   /** Screenshot after every step (for HTML reports). */
   trace: boolean;
 }
@@ -65,6 +67,7 @@ export const DEFAULT_CONFIG: RunnerConfig = {
   assertTimeoutMs: 6_000,
   waitForTimeoutMs: 10_000,
   maxScrolls: 5,
+  launchTimeoutMs: 10_000,
   trace: false,
 };
 
@@ -347,10 +350,20 @@ export class Runner {
   private async launch(app: string): Promise<Outcome> {
     await this.driver.launch(app);
     this.invalidate();
+    // Cold starts can take a few seconds: poll the (cheap) foreground check before reading the screen.
+    const deadline = performance.now() + this.config.launchTimeoutMs;
+    let fg = await this.driver.foregroundApp();
+    while (fg && fg !== app && performance.now() < deadline) {
+      await sleep(400);
+      fg = await this.driver.foregroundApp();
+    }
     const settled = await this.settle(undefined);
-    const fg = await this.driver.foregroundApp();
     if (fg && fg !== app && !settled.packages.includes(app)) {
-      return new Outcome("failed", "deterministic", `${app} is not in the foreground (saw ${fg})`);
+      return new Outcome(
+        "failed",
+        "deterministic",
+        `${app} is not in the foreground after ${this.config.launchTimeoutMs / 1000}s (saw ${fg})`,
+      );
     }
     return this.afterAction(true);
   }
@@ -370,6 +383,7 @@ export class Runner {
     const cached = this.cache?.get(key);
     let healed = false;
     let scrolls = 0;
+    let exhausted = false;
 
     for (;;) {
       const snap = await this.snapshot();
@@ -394,10 +408,15 @@ export class Runner {
         }
       }
 
-      const knownSafe = cached?.risk !== undefined && cached.risk < this.config.riskBlock && decidedBy === "cache";
-      const askRisk = this.config.riskGuard && !this.allowRiskyNext && !knownSafe && Boolean(this.jev);
+      const canScrollMore = scroll && !exhausted && scrolls < this.config.maxScrolls && snap.elements.some((e) => e.scrollable);
+      // With a cache entry we know what to look for: search intermediate screens deterministically and
+      // ask Jev (to heal) only on the first screen and once scrolling is exhausted.
+      const deferPick = Boolean(cached) && scrolls > 0 && canScrollMore;
       // Exact selectors fall back to Jev only when it is configured; plain text targets always need it.
-      const askPick = !element && (typeof target === "string" || (Boolean(this.jev) && Boolean(target.text || target.desc)));
+      const askPick = !element && !deferPick && (typeof target === "string" || (Boolean(this.jev) && Boolean(target.text || target.desc)));
+      const knownSafe = cached?.risk !== undefined && cached.risk < this.config.riskBlock && decidedBy === "cache";
+      // Only judge risk when we are about to act (an element is known, or Jev may pick one now).
+      const askRisk = this.config.riskGuard && !this.allowRiskyNext && !knownSafe && Boolean(this.jev) && (Boolean(element) || askPick);
       let risk: number | undefined = knownSafe ? cached?.risk : undefined;
 
       if (askPick || askRisk) {
@@ -427,14 +446,16 @@ export class Runner {
       }
 
       if (!element) {
-        const canScroll = scroll && scrolls < this.config.maxScrolls && snap.elements.some((e) => e.scrollable);
-        if (canScroll) {
+        if (canScrollMore) {
           const before = snap.hash;
           await this.swipe("up");
           await sleep(this.config.settleMs);
           const after = await this.snapshot(true);
           scrolls += 1;
           if (after.hash !== before) continue;
+          // End of the list. If Jev was skipped on this screen, give it one look before failing.
+          exhausted = true;
+          if (deferPick) continue;
         }
         return new Outcome("failed", askPick ? "jev" : "deterministic", `no element matches "${targetText}"`, {
           ...(scrolls ? { scrolls } : {}),

@@ -53,6 +53,8 @@ export interface RunOptions extends ConnectOptions {
   record?: boolean;
   /** Write the HTML report (default true). */
   html?: boolean;
+  /** Include the resume_flow hint (only meaningful for MCP sessions). */
+  resumeHint?: boolean;
 }
 
 /** A started run that may be paused on a step and resumed later (MCP resume_flow). */
@@ -138,7 +140,7 @@ export class RunSession {
       html = join(this.dir, "report.html");
       await writeFile(html, toHtml([{ result: r, usage: this.usage }], `jevclaude · ${r.flow}`));
     }
-    return formatReport(r, this.usage, { runId: this.id, dir: this.dir, html, screenshot, video });
+    return formatReport(r, this.usage, { ...(this.opts.resumeHint ? { runId: this.id } : {}), dir: this.dir, html, screenshot, video });
   }
 
   async close() {

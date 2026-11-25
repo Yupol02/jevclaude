@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+First real-device run (Samsung Galaxy S22 Ultra, Android 16): both example flows pass; measured numbers are in the README.
+
+### Fixed
+- `launch` is more reliable on Android: it starts the resolved launcher activity with `am start -W`, wakes the screen, reports a locked phone clearly, and waits up to 10 s (`launchTimeoutMs`) for the app to reach the foreground. Before, a slow cold start was reported as a failure.
+- With a replay-cache entry, scrolling to find a target no longer asks Jev on every screen. Intermediate screens are searched deterministically, and Jev is asked only on the first screen and when the list ends. The risk question is asked only when an action is about to happen.
+- The CLI no longer prints the MCP-only `resume_flow` hint.
+
+### Added
+- `examples/flows/settings-search-unicode.yaml`, a Unicode typing check on any Android phone.
+
 ## [0.2.1] — 2026-11-25
 
 ### Changed

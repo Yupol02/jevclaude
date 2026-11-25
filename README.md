@@ -128,10 +128,15 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 ## Status and limits
 
 - **What's verified:**
-  - 47 unit tests, 90% line coverage, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
+  - 48 unit tests, 90% line coverage, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
   - The live Jev API is checked with `npm run jev:smoke`.
-- **What's not verified yet:** a full run on a real phone or simulator. See the [e2e checklist](CONTRIBUTING.md#end-to-end-checklist).
+  - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI, with both backends, the replay cache, Unicode typing and `run_flow` → `resume_flow` over MCP. Results are below.
+- **What's not verified yet:**
+  - iOS on a live simulator.
+  - The risk guard and permission dialogs on a device (they are covered by unit tests only).
+  - See the [e2e checklist](CONTRIBUTING.md#end-to-end-checklist).
 - **Jev's weak spots:** counting, arithmetic and multi-hop reasoning. Check numbers with `see:`.
+- **Literal reading:** Jev takes wording literally. "Results are shown *under* the search field" correctly scored 0.19 on a phone whose search bar sits *below* the results. Describe what must be true, not where it is.
 - **Text-only:** canvas, games and Flutter apps without semantics produce empty trees. Those need Claude with screenshots.
 - **Android typing:** the adb-only backend types ASCII only. `setup android` enables Unicode.
 - **iOS:** simulator only for now. Real devices need WebDriverAgent signing.
@@ -144,7 +149,22 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 - plain `claude -p` driving `adb`
 - optionally Maestro
 
-It prints pass rate, median time, tokens and cost. **No numbers are published here until they are measured on a real device.**
+It prints pass rate, median time, tokens and cost.
+
+### Measured so far
+
+These are single runs on a Samsung Galaxy S22 Ultra (Android 16, Turkish UI) on 2026-11-25, with Jev `jev-1.14.0` through the TypeSafe API. The flows are [settings-smoke.yaml](examples/flows/settings-smoke.yaml) (5 steps; the target is found after 3 scrolls) and [settings-search-unicode.yaml](examples/flows/settings-search-unicode.yaml) (7 steps).
+
+| What | Result |
+|---|---|
+| Screen read, `uiautomator dump` (adb backend) | 2.28–2.34 s (5 reads) |
+| Screen read, UiAutomator2 backend | 0.12–0.21 s (5 reads; the first read right after a scroll can take up to 2.2 s while the UI settles) |
+| settings-smoke, adb backend, no cache | passed · 22.9 s · 9 Jev calls · 9,574 tokens · ≈ $0.0004 |
+| settings-smoke, UiAutomator2, cold cache | passed · 15.2 s · 9 Jev calls · 9,580 tokens |
+| settings-smoke, UiAutomator2, warm cache | passed · 13.7 s · 6 Jev calls · 5,461 tokens |
+| settings-search-unicode (types `parlaklık`) | passed · 11.0–11.7 s · 6 Jev calls · ≈ 4,680 tokens |
+
+The plain Claude Code + adb baseline has **not been measured yet**, so there is no "N× faster" claim here.
 
 ## Development
 

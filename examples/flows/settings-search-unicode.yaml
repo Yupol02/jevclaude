@@ -1,0 +1,16 @@
+# Unicode typing check (needs the UiAutomator2 backend: `jevclaude setup android`).
+# Searches Android Settings for a Turkish word; harmless — nothing is changed.
+name: settings search (unicode)
+app: com.android.settings
+platform: android
+fresh_start: true
+env:
+  QUERY: "parlaklık"
+steps:
+  - launch
+  - tap: "the search button or search field at the top of Settings"
+  - type: { into: "the search text field", text: "${QUERY}" }
+  - wait_for: "${QUERY}"
+  - expect: "Settings search results are listed on the screen"
+  - back
+  - back

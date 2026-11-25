@@ -102,7 +102,7 @@ export async function startMcpServer(): Promise<void> {
         if (!source) return fail(new Error("pass `flow` (YAML) or `flow_file`"));
         const baseDir = flow_file ? dirname(resolve(flow_file)) : process.cwd();
         const parsed = parseFlow(source, baseDir, flow_file ? resolve(flow_file) : undefined);
-        const session = await RunSession.create(parsed, { device, config: trace ? { trace: true } : {} });
+        const session = await RunSession.create(parsed, { device, resumeHint: true, config: trace ? { trace: true } : {} });
         const result = await session.start();
         const report = await session.report();
         if (result.resumable) sessions.set(session.id, { session, touched: Date.now() });

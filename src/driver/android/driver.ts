@@ -103,6 +103,20 @@ export class AndroidDriver implements Driver {
   }
 
   async launch(app: string) {
+    let state = await this.adb.screenState();
+    if (!state.awake) {
+      await this.adb.key("KEYCODE_WAKEUP");
+      await sleep(500);
+      state = await this.adb.screenState();
+    }
+    if (state.locked) {
+      // Swipe-only lock screens open with MENU; a PIN/pattern lock needs the user.
+      await this.adb.key("KEYCODE_MENU");
+      await sleep(500);
+      if ((await this.adb.screenState()).locked) {
+        throw new Error("the phone is locked — unlock it (or set Screen lock to None/Swipe on the test phone) and retry");
+      }
+    }
     await this.adb.launch(app);
   }
 
