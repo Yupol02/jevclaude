@@ -16,6 +16,7 @@ permissions: stop             # optional: allow | deny | stop when a system perm
 env: { USER_NAME: "Test" }    # optional: values for \${VAR} (environment wins)
 steps:
   - launch
+  - open: "https://example.com/page"   # URL or deep link (a new tab in Chrome)
   - tap: "Log in button"      # natural language → replay cache, else Jev picks; scrolls to find it
   - tap: { id: btn_login }    # exact selector (id / text / desc) → no model call
   - type: { into: "email field", text: "\${TEST_EMAIL}", submit: false }   # Unicode OK on uia2/iOS
@@ -31,6 +32,7 @@ steps:
     then: [ { tap: { text: "Not now" } } ]
   - run: flows/login.yaml     # inline another flow's steps
   - allow_risky: true         # ONLY after the user approved the next risky tap/type
+Chrome pages are read through Chrome DevTools: page content appears as Web.<tag> elements (ids prefixed web:), so see/tap/type/expect work on web pages.
 Per-step modifiers: optional: true (failure doesn't stop the flow), timeout: <ms>.
 Prefer exact selectors and see:/wait_for: when you know the text — they cost nothing.
 Jev is weak at counting/arithmetic: check numbers with see: instead of expect:.`;
@@ -54,7 +56,7 @@ function gc() {
 
 export async function startMcpServer(): Promise<void> {
   loadDotEnv();
-  const server = new McpServer({ name: "jevclaude", version: "0.3.0" });
+  const server = new McpServer({ name: "jevclaude", version: "0.4.0" });
 
   server.registerTool("list_devices", { description: "List Android devices (adb) and booted iOS simulators." }, async () => {
     try {

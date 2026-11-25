@@ -12,7 +12,7 @@ import type { Usage } from "./report/text.js";
 import { loadDotEnv, runFlow, snapshotText, writeCombinedHtml, writeJUnit } from "./session.js";
 import { doctor, init, setupAndroid, setupIos } from "./setup.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 const HELP = `jevclaude ${VERSION} — mobile app testing: Claude plans, Jev decides, the device runner executes.
 

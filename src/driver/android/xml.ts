@@ -57,7 +57,8 @@ export function parseAndroidXml(xml: string): UiSnapshot {
       selected: isTrue(a.selected),
     };
     const visible = bounds.right > bounds.left && bounds.bottom > bounds.top && a.displayed !== "false";
-    const actionable = el.clickable || el.editable || el.scrollable || el.checkable || PROGRESS.test(cls);
+    // WebViews are kept even when unlabeled: web pages read through DevTools are mapped into them.
+    const actionable = el.clickable || el.editable || el.scrollable || el.checkable || PROGRESS.test(cls) || /WebView/.test(cls);
     const interesting = actionable || (!lifted && (el.text || el.desc));
     let liftsChildren = lifted;
     if (visible && interesting) {

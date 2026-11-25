@@ -63,9 +63,10 @@ name: login
       { see: "Welcome" },
       { expect: "User is signed in" },
       { swipe: "up" },
+      { open: "https://example.com" },
     ]);
     expect(warnings.join("\n")).toMatch(/clearState/);
-    expect(warnings.join("\n")).toMatch(/openLink/);
+    expect(warnings.join("\n")).not.toMatch(/openLink/);
     expect(() => parseFlow(value)).not.toThrow();
   });
 

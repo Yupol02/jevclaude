@@ -1,0 +1,22 @@
+# Read and use a web page in Chrome (via DevTools): content, a link below the fold, Unicode search, then close the tab.
+name: chrome web page
+app: com.android.chrome
+platform: android
+steps:
+  - open: "https://en.wikipedia.org/wiki/Istanbul" # opens a new tab
+  - wait_for: "Istanbul (disambiguation)"
+  - if_visible: "Most people still don't know" # "get the app" banner
+    then: [{ tap: { text: "Hide" } }]
+  - expect: "A Wikipedia article about the city of Istanbul is open"
+  - tap: { text: "largest city" } # scrolls the page if needed
+  - wait_for: "largest cities"
+  - expect: "A Wikipedia page about the largest cities is open"
+  - back
+  - wait_for: "Istanbul (disambiguation)"
+  - tap: { id: "web:searchIcon" }
+  - wait_for: "Search Wikipedia" # the search panel opens with a short animation
+  - type: { into: "the Wikipedia search input", text: "İstanbul Boğazı", submit: true }
+  - expect: "Wikipedia shows an article or search results about the Bosphorus"
+  - tap: { id: tab_switcher_button }
+  - wait: 500
+  - tap: "the close button of the Bosporus - Wikipedia tab"

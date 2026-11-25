@@ -24,6 +24,7 @@ export type Step =
   | "stop"
   | "hide_keyboard"
   | { launch: string }
+  | { open: string }
   | { tap: Target; scroll?: boolean; optional?: boolean; timeout?: number }
   | { type: { into: Target; text: string; submit?: boolean }; scroll?: boolean; optional?: boolean; timeout?: number }
   | { swipe: "up" | "down" | "left" | "right" }
@@ -41,6 +42,8 @@ export const StepSchema: z.ZodType<Step> = z.lazy(() =>
   z.union([
     z.enum(["launch", "back", "stop", "hide_keyboard"]),
     z.object({ launch: z.string().min(1) }).strict(),
+    /** Open a URL or deep link in the flow's app (a new tab in browsers). */
+    z.object({ open: z.string().min(1) }).strict(),
     z.object({ tap: Target, scroll: z.boolean().optional(), ...common }).strict(),
     z
       .object({
@@ -145,6 +148,7 @@ export function describeStep(step: Step): string {
   if (typeof step === "string") return step.replace("_", " ");
   const opt = "optional" in step && step.optional ? " (optional)" : "";
   if ("launch" in step) return `launch ${step.launch}`;
+  if ("open" in step) return `open ${step.open}`;
   if ("tap" in step) return `tap ${describeTarget(step.tap)}${opt}`;
   if ("type" in step) return `type into ${describeTarget(step.type.into)}${step.type.submit ? " + submit" : ""}${opt}`;
   if ("swipe" in step) return `swipe ${step.swipe}`;

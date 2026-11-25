@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseAndroidXml } from "../src/driver/android/xml.js";
 import { SelectorCache } from "../src/engine/cache.js";
 import { parseFlow } from "../src/engine/flow.js";
 import { Runner } from "../src/engine/runner.js";
@@ -97,10 +98,11 @@ describe("Runner: resolution layers", () => {
       d.current = pages(page);
     };
     const cache = tmpCache();
+    // learned on the screen where the entry was found (page 3)
     cache.set(SelectorCache.key("tap", "about entry"), {
       selector: { text: "About phone" },
       label: "About phone",
-      fingerprint: "x",
+      fingerprint: parseAndroidXml(pages(3)).fingerprint,
       risk: 0.01,
     });
     const jev = new FakeJev((q) => (q === "pick" ? pick("none", 0.9) : yes(0.01)));
@@ -110,6 +112,25 @@ describe("Runner: resolution layers", () => {
     // one Jev request on the first screen (pick + risk together); screens 2–4 are searched without Jev
     expect(jev.asked("pick")).toBe(1);
     expect(jev.requests.filter((q) => "pick" in q.questions || "risk" in q.questions)).toHaveLength(1);
+  });
+});
+
+describe("Runner: cache trust", () => {
+  it("doesn't trust a cached selector on a different screen: Jev confirms and the cache is relearned", async () => {
+    const cache = tmpCache();
+    // learned on another screen where the same selector could mean something else
+    cache.set(SelectorCache.key("tap", "the sign in button"), {
+      selector: { id: "btn_login" },
+      label: "Log in",
+      fingerprint: "other-screen",
+      risk: 0.01,
+    });
+    const jev = safeJev("e3");
+    const r = await new Runner(loginDevice(), jev, { config: FAST, cache }).start(flow(`  - tap: "the sign in button"`));
+    expect(r.status).toBe("passed");
+    expect(r.steps[0]!.decidedBy).toBe("jev");
+    expect(jev.asked("pick")).toBe(1);
+    expect(cache.get(SelectorCache.key("tap", "the sign in button"))?.fingerprint).toBe(parseAndroidXml(LOGIN).fingerprint);
   });
 });
 

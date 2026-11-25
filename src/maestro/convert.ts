@@ -119,6 +119,9 @@ export function importMaestro(source: string): Converted<Flow> {
       case "waitForAnimationToEnd":
         steps.push({ wait: 500 });
         break;
+      case "openLink":
+        steps.push({ open: typeof arg === "string" ? arg : String((arg as { link?: string }).link) });
+        break;
       case "takeScreenshot":
         warnings.push(`${where}: ignored (use --trace for per-step screenshots)`);
         break;
@@ -152,6 +155,7 @@ export function exportMaestro(flow: Flow): Converted<string> {
       else if (s === "stop") out.push("stopApp");
       else if (s === "hide_keyboard") out.push("hideKeyboard");
       else if ("launch" in s) out.push({ launchApp: { appId: s.launch } });
+      else if ("open" in s) out.push({ openLink: s.open });
       else if ("tap" in s) {
         if (typeof s.tap === "string")
           warnings.push(`tap "${s.tap}": natural-language target exported as text; Maestro will match it literally`);

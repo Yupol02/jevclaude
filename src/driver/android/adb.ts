@@ -112,6 +112,15 @@ export class Adb {
     }
   }
 
+  /** Open a URL / deep link with a VIEW intent, optionally pinned to one package. */
+  async openUrl(url: string, pkg?: string): Promise<void> {
+    const out = await this.shell(
+      ["am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", `'${url.replace(/'/g, "'\\''")}'`, ...(pkg ? ["-p", pkg] : [])],
+      30_000,
+    );
+    if (/Error:|unable to resolve/i.test(out)) throw new Error(`could not open ${url}: ${out.trim().split("\n").pop()}`);
+  }
+
   /** Screen on/off and keyguard state. */
   async screenState(): Promise<{ awake: boolean; locked: boolean }> {
     const power = await this.shell(["dumpsys", "power"]).catch(() => "");

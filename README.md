@@ -144,6 +144,32 @@ Reports are written to `reports/<time>-<flow>/`:
 
 Exit codes: 0 if everything passed, 1 otherwise.
 
+## Web pages (Chrome)
+
+When Chrome is in front, every screen read also reads the visible tab through Chrome DevTools:
+- **Connection:** `adb forward` to Chrome's `chrome_devtools_remote` socket. The tab is picked by the address bar.
+- **Reading:** a small in-page script lists visible text, links, buttons and inputs. Elements covered by an overlay are skipped.
+- **Mapping:** page elements are mapped to screen pixels and merged into the tree as `Web.a "largest city"`, `Web.input "Search Wikipedia" id=web:searchInput`, …
+
+So `see:`, `wait_for:`, `tap:`, `type:`, `expect:` and Jev's element picks work on page content. Web inputs are typed with DevTools `Input.insertText` and submitted with a DevTools Enter, so Unicode works on any backend.
+
+```yaml
+app: com.android.chrome
+steps:
+  - open: "https://en.wikipedia.org/wiki/Istanbul"   # new tab
+  - wait_for: "Istanbul (disambiguation)"
+  - tap: { text: "largest city" }                    # scrolls the page if needed
+  - tap: { id: "web:searchIcon" }
+  - type: { into: "the Wikipedia search input", text: "İstanbul Boğazı", submit: true }
+  - expect: "Wikipedia shows an article about the Bosphorus"
+```
+
+Full example: [examples/flows/chrome-web.yaml](examples/flows/chrome-web.yaml).
+
+**Results.** It passed 6/6 times on the UiAutomator2 backend at 10.5–12.4 s, and once on the adb backend at 36 s.
+
+**Safety.** Before tapping a web element, the runner checks that the point isn't on the browser's own UI (address bar, menu). If it is, it refuses to tap and stops as `uncertain`. This rule was added after an early build mis-mapped a tap onto Chrome's menu. `JEVCLAUDE_WEB=off` turns web reading off.
+
 ## Decisions and thresholds
 
 | Question | How | Rule (configurable in `jevclaude.config.yaml`) |
@@ -176,7 +202,7 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 - **Jev's weak spots:** counting, arithmetic and multi-hop reasoning. Check numbers with `see:`.
 - **Literal reading:** Jev takes wording literally. "Results are shown *under* the search field" correctly scored 0.19 on a phone whose search bar sits *below* the results. Describe what must be true, not where it is.
 - **Text-only:** canvas, games and Flutter apps without semantics produce empty trees. Those need Claude with screenshots.
-- **Web pages in Chrome:** Chrome exposes page content to UiAutomator only some of the time. example.com showed its text; a Wikipedia article showed only an empty "Web View", even after scrolling and with every tree setting tried. Browser chrome (address bar, tabs, menus) works. A failing step on such a screen says so in its message. Reading pages through the Chrome DevTools protocol is the planned fix.
+- **Web pages in Chrome are read through Chrome DevTools** (see [Web pages](#web-pages-chrome)), because Chrome's accessibility tree exposes page content only some of the time. WebViews inside other apps aren't covered yet: they need `WebView.setWebContentsDebuggingEnabled(true)` and a per-app socket.
 - **Unlabeled controls:** a tap target with no label gets the text it touches as a `near="…"` hint (e.g. a date field's "Date is required" message). It works, but adding a `contentDescription` / `semantics` label to the app is more reliable, and better for accessibility.
 - **Don't record the screen in parallel:** a `screencap` loop running next to a test slowed the phone enough to break UiAutomator2 calls. Use `--trace` (one screenshot per step) or `--record`.
 - **Android typing:** the adb-only backend types ASCII only. `setup android` enables Unicode.

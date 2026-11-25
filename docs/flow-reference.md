@@ -21,6 +21,7 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
 | Step | Example | Notes |
 |---|---|---|
 | `launch` | `- launch` / `- launch: com.other.app` | Waits for the screen to settle, then checks the app is in the foreground |
+| `open` | `- open: "https://example.com/page"` / `- open: "myapp://orders/42"` | Opens a URL or deep link in the flow's app (Android VIEW intent, iOS WebDriverAgent `/url`). In Chrome it opens a new tab |
 | `stop` | `- stop` | Force-stops or terminates the app |
 | `tap` | `- tap: "Log in button"` | Natural language: exact label, then cache, then Jev. Scrolls to find the target (`scroll: false` disables this) |
 | | `- tap: { id: btn_login }` | Exact selector: `id` (resource-id / accessibility id), `text`, `desc`, or a combination |
@@ -59,6 +60,10 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
   optional: true
   timeout: 2000
 ```
+
+## Web pages
+
+In Chrome, page content is read through Chrome DevTools and appears as `Web.<tag>` elements (`Web.a`, `Web.button`, `Web.input`, `Web.p`, …). Ids come from the page's `id` / `name` attributes, prefixed with `web:` (e.g. `tap: { id: "web:searchIcon" }`). Only what is visible is listed; elements under an overlay are skipped; `tap:` scrolls the page to find a target.
 
 ## Variables
 

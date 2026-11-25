@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-11-25
+
+### Added
+- **Web pages in Chrome through Chrome DevTools.** Chrome's accessibility tree exposes page content only some of the time; it showed an empty "Web View" for a Wikipedia article. When Chrome is in front, the driver:
+  - reads the visible tab over `adb forward` to `chrome_devtools_remote`
+  - merges visible text, links, buttons and inputs into the tree as `Web.*` elements, mapped to screen pixels and skipping elements under overlays
+  - types into web inputs and presses Enter through DevTools, so Unicode works on any backend
+
+  On a Galaxy S22 Ultra, [chrome-web.yaml](examples/flows/chrome-web.yaml) (read, tap a link below the fold, Unicode search, close the tab) passed 6/6 times at 10.5–12.4 s, and once on the adb backend.
+- **`open:` step** opens a URL or deep link in the flow's app: an Android VIEW intent, or WebDriverAgent `/url` on iOS. Maestro's `openLink` converts to it.
+
+### Changed
+- **A cached selector is used directly only on the screen where it was learned** (same fingerprint). On another screen, Jev confirms it first. Chrome's tab list had made the cache type into "search your tabs" instead of the address bar.
+- **Targets are searched upwards after downwards,** e.g. for a toolbar that hides on scroll.
+
+### Fixed
+- **Web elements map onto the right pixels.** The page is anchored at the bottom of its container and never placed under a visible toolbar; an early build tapped Chrome's menu instead of a page link. As a last check, the runner refuses to tap a web element whose point lands on native browser UI.
+- WebView nodes are kept in the Android tree even when unlabeled.
+
 ## [0.3.0] — 2026-11-25
 
 The final round of hardening, checked on Calculator, Clock, Settings and Play Store (15/15 runs passed, 4.6–7.7 s each) plus two negative controls.

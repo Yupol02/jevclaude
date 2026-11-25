@@ -10,6 +10,10 @@ Please report vulnerabilities privately through GitHub's "Report a vulnerability
 - **What gets sent.** Flows reference credentials as `${VAR}`. Typed values are sent to the device, never to Jev.
 - **Passwords on screen.** Password fields are rendered as `password` flags, without their content, in what Jev sees.
 
+## Web pages (Chrome DevTools)
+
+When Chrome is in front, JevClaude connects to Chrome's DevTools socket on the phone through `adb forward` (to a local port, not exposed beyond your machine). It reads only the tab on screen (matched by the address bar) and only its visible elements. It doesn't read cookies, storage or other tabs. The page text goes into the same masked screen state as native screens. `JEVCLAUDE_WEB=off` disables this.
+
 ## What leaves your machine
 
 Each Jev call sends a compact text dump of the current screen to the configured provider (TypeSafe or Cloudflare). Before it is sent, e-mail addresses, phone numbers and card/IBAN-like numbers are replaced with `<email>`, `<phone>`, `<card-number>` and `<iban>`. Names and other free text are not masked, so don't test production accounts or screens with personal data you can't share with that provider. Screenshots and videos stay local in `reports/`.

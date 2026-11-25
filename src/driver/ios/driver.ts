@@ -92,6 +92,10 @@ export class IosDriver implements Driver {
     await this.wda.launch(app);
   }
 
+  async openUrl(url: string, _app?: string) {
+    await this.wda.openUrl(url);
+  }
+
   async stop(app: string) {
     await this.wda.terminate(app).catch(() => {});
   }

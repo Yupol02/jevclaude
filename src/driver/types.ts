@@ -30,6 +30,8 @@ export interface Driver {
   keyboardShown?(): Promise<boolean>;
 
   launch(app: string): Promise<void>;
+  /** Open a URL or deep link, in `app` when given (Android: VIEW intent; iOS: WebDriverAgent /url). */
+  openUrl(url: string, app?: string): Promise<void>;
   stop(app: string): Promise<void>;
   /** The app currently in the foreground (package / bundle id), if the driver can tell. */
   foregroundApp(): Promise<string | undefined>;

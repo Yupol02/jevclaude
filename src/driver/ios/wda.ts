@@ -72,6 +72,10 @@ export class WdaClient {
     return this.call("POST", "/wda/keys", { value: [...text] });
   }
 
+  openUrl(url: string) {
+    return this.call("POST", "/url", { url });
+  }
+
   launch(bundleId: string) {
     return this.call("POST", "/wda/apps/launch", { bundleId });
   }

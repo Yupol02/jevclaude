@@ -1,9 +1,14 @@
 import type { ChildProcess } from "node:child_process";
 import type { UiElement, UiSnapshot } from "../../core/uitree.js";
+import { findWebContainer, mergeWebPage, urlHint } from "../../core/web.js";
 import { type Driver, sleep } from "../types.js";
 import { Adb, findCrashes } from "./adb.js";
+import { CdpClient } from "./cdp.js";
 import { UIA2_SERVER_PKG, UIA2_TEST_PKG, Uia2Client } from "./uia2.js";
 import { parseAndroidXml } from "./xml.js";
+
+/** Browsers whose pages are read through Chrome DevTools (their a11y tree often omits web content). */
+const CDP_BROWSERS = ["com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary"];
 
 const KEYS: Record<string, string> = {
   enter: "KEYCODE_ENTER",
@@ -25,6 +30,12 @@ export class AndroidDriver implements Driver {
   readonly platform = "android" as const;
   private uia2?: Uia2Client;
   private log: (m: string) => void = () => {};
+  private cdp?: CdpClient;
+  /** "off" after DevTools turned out to be unavailable, or when disabled with JEVCLAUDE_WEB=off. */
+  private webState: "unknown" | "on" | "off" = process.env.JEVCLAUDE_WEB === "off" ? "off" : "unknown";
+  private webFailures = 0;
+  /** The last text went into a web input through DevTools, so Enter should go there too. */
+  private lastTypedWeb = false;
   private recorder?: ChildProcess;
 
   private constructor(private readonly adb: Adb) {}
@@ -74,6 +85,42 @@ export class AndroidDriver implements Driver {
   }
 
   async snapshot(): Promise<UiSnapshot> {
+    return this.withWeb(await this.nativeSnapshot());
+  }
+
+  /**
+   * When Chrome is in front, read the visible tab through DevTools and merge its elements (text,
+   * links, buttons, inputs, with screen coordinates) into the tree. Falls back to the plain tree.
+   */
+  private async withWeb(snap: UiSnapshot): Promise<UiSnapshot> {
+    if (this.webState === "off") return snap;
+    if (!snap.packages.some((p) => CDP_BROWSERS.includes(p)) || !findWebContainer(snap)) return snap;
+    try {
+      if (!this.cdp) {
+        const c = new CdpClient(this.adb);
+        try {
+          await c.start();
+        } catch (e) {
+          await c.close();
+          throw e;
+        }
+        this.cdp = c;
+        this.webState = "on";
+      }
+      const page = await this.cdp.readPage(urlHint(snap));
+      this.webFailures = 0;
+      return mergeWebPage(snap, page);
+    } catch (e) {
+      this.webFailures += 1;
+      if (this.webFailures >= 3) {
+        this.webState = "off";
+        this.log(`web page reading via Chrome DevTools is off: ${(e as Error).message}`);
+      }
+      return snap;
+    }
+  }
+
+  private async nativeSnapshot(): Promise<UiSnapshot> {
     if (this.uia2) {
       try {
         return parseAndroidXml(await this.uia2.source());
@@ -124,6 +171,17 @@ export class AndroidDriver implements Driver {
   }
 
   async typeText(text: string, target?: UiElement) {
+    // Web inputs (read through DevTools): the tap focused them; insert the text in the page itself.
+    this.lastTypedWeb = false;
+    if (target?.cls.startsWith("Web.") && this.cdp) {
+      try {
+        await this.cdp.insertText(text);
+        this.lastTypedWeb = true;
+        return;
+      } catch {
+        /* fall through to the native paths */
+      }
+    }
     const ascii = !/[^\x20-\x7e]/.test(text);
     if (this.uia2) {
       const errors: string[] = [];
@@ -150,6 +208,14 @@ export class AndroidDriver implements Driver {
   }
 
   async pressKey(key: string) {
+    if (this.lastTypedWeb && key.toLowerCase() === "enter" && this.cdp) {
+      this.lastTypedWeb = false;
+      try {
+        return await this.cdp.pressEnter();
+      } catch {
+        /* fall back to a device key event */
+      }
+    }
     const k = KEYS[key.toLowerCase()] ?? (/^\d+$/.test(key) ? key : `KEYCODE_${key.toUpperCase().replace(/^KEYCODE_/, "")}`);
     await this.adb.key(k);
   }
@@ -183,6 +249,10 @@ export class AndroidDriver implements Driver {
       }
     }
     await this.adb.launch(app);
+  }
+
+  async openUrl(url: string, app?: string) {
+    await this.adb.openUrl(url, app);
   }
 
   async stop(app: string) {
@@ -219,6 +289,7 @@ export class AndroidDriver implements Driver {
   }
 
   async close() {
+    await this.cdp?.close();
     await this.uia2?.stop();
   }
 }

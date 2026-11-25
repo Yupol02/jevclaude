@@ -23,6 +23,8 @@ Hepsi akış bir kez yazıldıktan sonraki çalıştırma başına. Örneklem k�
 
 **0.3.0 son kontrol:** Hesap Makinesi, Saat, Ayarlar ve Play Store akışları 3'er kez çalıştı; 15 çalıştırmanın hepsi geçti (çalıştırma başına 4,6–7,7 sn). Yanlış beklentiler p = 0,01 ile başarısız oldu. Risk koruması Play Store'daki "Yükle" butonunu engelliyor (p = 0,81–0,87). Jev'e giden ekran özetinde e-posta, telefon ve kart/IBAN numaraları maskeleniyor.
 
+**0.4.0 — web sayfaları:** Chrome öndeyken sayfa içeriği Chrome DevTools üzerinden okunuyor (metinler, bağlantılar, butonlar, giriş kutuları). Böylece `see`, `tap`, `type` ve `expect` web sayfalarında da çalışıyor; Türkçe arama dahil örnek akış telefonda 6/6 geçti. Yeni `open:` adımı bir URL'yi ya da derin bağlantıyı doğrudan açıyor.
+
 ## Neden?
 
 Claude Code telefonu kendisi sürdüğünde her adım tam bir LLM turu oluyor: ekran görüntüsü, okuma, düşünme, aksiyon. Bu hem yavaş hem pahalı. Oysa bu kararların çoğu küçük ve tiplidir: "Bu 30 elemandan hangisi giriş butonu?", "Ekranda sepet görünüyor mu, evet/hayır?". JevClaude'da her adım şu sırayla çözülür:

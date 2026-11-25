@@ -12,6 +12,7 @@ import {
   uniqueSelector,
   webContentHidden,
 } from "../core/uitree.js";
+import { hitsNativeUi } from "../core/web.js";
 import { type Driver, sleep } from "../driver/types.js";
 import type { JevAnswer, JevClient } from "../jev/client.js";
 import {
@@ -330,6 +331,12 @@ export class Runner {
       return this.afterAction();
     }
     if ("launch" in step) return this.launch(step.launch);
+    if ("open" in step) {
+      this.keyboardMaybeUp = false;
+      await this.driver.openUrl(interpolate(step.open, this.env), flow.app);
+      this.invalidate();
+      return this.afterAction();
+    }
     if ("allow_risky" in step) {
       this.allowRiskyNext = true;
       return new Outcome("passed", "deterministic", "next tap/type may be risky");
@@ -413,6 +420,8 @@ export class Runner {
     let healed = false;
     let scrolls = 0;
     let exhausted = false;
+    /** Search downwards first; if the target isn't there, search back upwards (e.g. a toolbar hidden on scroll). */
+    let direction: "up" | "down" = "up";
 
     for (;;) {
       const snap = await this.snapshot();
@@ -426,12 +435,18 @@ export class Runner {
         const hits = findBySelector(snap, target);
         if (hits.length === 1) element = hits[0];
       }
+      // A cached selector is trusted only on the same screen it was learned on (same fingerprint).
+      // On a different screen the same selector can mean something else (e.g. Chrome's "search your
+      // tabs" box vs the address bar), so Jev confirms it and the cache is updated.
+      let cacheCandidate = false;
       if (!element && cached) {
         const hits = findBySelector(snap, cached.selector);
-        if (hits.length === 1) {
+        if (hits.length === 1 && cached.fingerprint === snap.fingerprint) {
           element = hits[0];
           decidedBy = "cache";
           this.cache?.hit(key);
+        } else if (hits.length === 1) {
+          cacheCandidate = true;
         } else {
           healed = true;
         }
@@ -447,7 +462,7 @@ export class Runner {
       const canScrollMore = scroll && !exhausted && scrolls < this.config.maxScrolls && snap.elements.some((e) => e.scrollable);
       // With a cache entry we know what to look for: search intermediate screens deterministically and
       // ask Jev (to heal) only on the first screen and once scrolling is exhausted.
-      const deferPick = Boolean(cached) && scrolls > 0 && canScrollMore;
+      const deferPick = Boolean(cached) && !cacheCandidate && scrolls > 0 && canScrollMore;
       // Exact selectors fall back to Jev only when it is configured; plain text targets always need it.
       const askPick = !element && !deferPick && (typeof target === "string" || (Boolean(this.jev) && Boolean(target.text || target.desc)));
       const knownSafe = cached?.risk !== undefined && cached.risk < this.config.riskBlock && decidedBy === "cache";
@@ -484,7 +499,7 @@ export class Runner {
       if (!element) {
         if (canScrollMore) {
           const before = snap.hash;
-          await this.swipe("up");
+          await this.swipe(direction);
           await sleep(this.config.settleMs);
           const after = await this.snapshot(true);
           scrolls += 1;
@@ -492,6 +507,13 @@ export class Runner {
           // End of the list. If Jev was skipped on this screen, give it one look before failing.
           exhausted = true;
           if (deferPick) continue;
+        }
+        if (scroll && direction === "up" && scrolls > 0 && snap.elements.some((e) => e.scrollable)) {
+          // Nothing below: go back up (the target may be above, or hidden with a collapsing toolbar).
+          direction = "down";
+          exhausted = false;
+          scrolls = 0;
+          continue;
         }
         return new Outcome("failed", askPick ? "jev" : "deterministic", `no element matches "${targetText}"${webHint(snap)}`, {
           ...(scrolls ? { scrolls } : {}),
@@ -522,12 +544,23 @@ export class Runner {
 
       element = await this.avoidKeyboard(snap, element);
       const { x, y } = center(element.bounds);
+      if (element.cls.startsWith("Web.")) {
+        const native = hitsNativeUi(snap, x, y);
+        if (native) {
+          return new Outcome(
+            "uncertain",
+            decidedBy,
+            `not tapping: the web element "${labelOf(element)}" maps onto the browser's own UI ("${labelOf(native)}"); the page position looks stale, retry`,
+          );
+        }
+      }
       await this.driver.tap(x, y);
       this.invalidate();
       if (element.editable) this.keyboardMaybeUp = true;
       if (kind === "type" && typing) {
         const text = interpolate(typing.text, this.env);
-        if (!this.driver.unicodeInput && /[^\x20-\x7e]/.test(text)) {
+        // Web inputs are typed through Chrome DevTools, which handles Unicode on any backend.
+        if (!this.driver.unicodeInput && !element.cls.startsWith("Web.") && /[^\x20-\x7e]/.test(text)) {
           return new Outcome(
             "failed",
             "none",

@@ -56,11 +56,11 @@ export class FakeDriver implements Driver {
     this.taps.push([x, y]);
     this.onTap(x, y, this);
   }
-  async swipe() {
+  async swipe(_x1?: number, _y1?: number, _x2?: number, _y2?: number) {
     this.swipes += 1;
     this.onSwipe(this);
   }
-  async typeText(t: string, target?: { text?: string; desc?: string; resourceId?: string }) {
+  async typeText(t: string, target?: { text?: string; desc?: string; resourceId?: string; cls?: string }) {
     this.typed.push(t);
     this.typedInto.push(target ? target.resourceId || target.desc || target.text : undefined);
   }
@@ -81,6 +81,10 @@ export class FakeDriver implements Driver {
     this.launched.push(app);
   }
   async stop() {}
+  opened: string[] = [];
+  async openUrl(url: string) {
+    this.opened.push(url);
+  }
   async foregroundApp() {
     return undefined;
   }
