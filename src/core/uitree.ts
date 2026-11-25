@@ -145,12 +145,26 @@ export type Selector = { id?: string; text?: string; desc?: string };
 
 const eq = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
 
+/**
+ * The separate texts a clickable row lifted from its children, e.g. "Network & internet · Mobile,
+ * Wi-Fi, hotspot" → ["Network & internet", "Mobile, Wi-Fi, hotspot"], so `{ text: "Network & internet" }`
+ * matches a title + summary row.
+ */
+function childParts(el: UiElement): string[] {
+  return el.childText
+    ? el.childText
+        .split(" · ")
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : [];
+}
+
 /** Deterministic lookup. Returns all elements matching the selector exactly (case-insensitive). */
 export function findBySelector(snap: UiSnapshot, sel: Selector): UiElement[] {
   return snap.elements.filter(
     (el) =>
       (sel.id === undefined || el.resourceId === sel.id || idSuffix(el.resourceId) === sel.id) &&
-      (sel.text === undefined || eq(el.text, sel.text) || eq(el.childText, sel.text)) &&
+      (sel.text === undefined || eq(el.text, sel.text) || eq(el.childText, sel.text) || childParts(el).some((p) => eq(p, sel.text!))) &&
       (sel.desc === undefined || eq(el.desc, sel.desc)),
   );
 }
@@ -163,7 +177,7 @@ export function exactLabelMatch(snap: UiSnapshot, target: string, kind: "tap" | 
   const t = target.trim().toLocaleLowerCase();
   const actionable = snap.elements.filter((el) => (kind === "type" ? el.editable : el.clickable || el.editable || el.selected));
   const hits = actionable.filter((el) =>
-    [el.text, el.desc, el.childText, idSuffix(el.resourceId)].some((v) => v && v.toLocaleLowerCase() === t),
+    [el.text, el.desc, el.childText, idSuffix(el.resourceId), ...childParts(el)].some((v) => v && v.toLocaleLowerCase() === t),
   );
   return hits.length === 1 ? hits[0] : undefined;
 }

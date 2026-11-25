@@ -114,3 +114,25 @@ describe("adb helpers", () => {
     expect(findCrashes(log, "com.other")).toHaveLength(0);
   });
 });
+
+describe("selectors on title + summary rows", () => {
+  const rows = parseAndroidXml(
+    `<?xml version='1.0' encoding='UTF-8'?><hierarchy rotation="0"><node class="android.widget.FrameLayout" package="com.android.settings" bounds="[0,0][1080,2400]">` +
+      `<node class="android.widget.LinearLayout" package="com.android.settings" clickable="true" bounds="[0,400][1080,560]"><node class="android.widget.TextView" text="Network &amp; internet" package="com.android.settings" bounds="[180,420][900,480]"/><node class="android.widget.TextView" text="Mobile, Wi-Fi, hotspot" package="com.android.settings" bounds="[180,480][900,540]"/></node>` +
+      `<node class="android.widget.LinearLayout" package="com.android.settings" clickable="true" bounds="[0,560][1080,720]"><node class="android.widget.TextView" text="Connected devices" package="com.android.settings" bounds="[180,580][900,640]"/><node class="android.widget.TextView" text="Bluetooth, pairing" package="com.android.settings" bounds="[180,640][900,700]"/></node>` +
+      `<node class="android.widget.LinearLayout" package="com.android.settings" clickable="true" bounds="[0,720][1080,880]"><node class="android.widget.TextView" text="Wi-Fi" package="com.android.settings" bounds="[180,740][900,800]"/><node class="android.widget.TextView" text="Bluetooth, pairing" package="com.android.settings" bounds="[180,800][900,860]"/></node>` +
+      `</node></hierarchy>`,
+  );
+
+  it("matches a row by one of its lifted texts", () => {
+    const hits = findBySelector(rows, { text: "Network & internet" });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.childText).toBe("Network & internet · Mobile, Wi-Fi, hotspot");
+    expect(exactLabelMatch(rows, "connected devices", "tap")?.childText).toMatch(/^Connected devices/);
+  });
+
+  it("stays ambiguous when two rows share the text", () => {
+    expect(findBySelector(rows, { text: "Bluetooth, pairing" })).toHaveLength(2);
+    expect(exactLabelMatch(rows, "Bluetooth, pairing", "tap")).toBeUndefined();
+  });
+});

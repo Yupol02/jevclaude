@@ -7,3 +7,4 @@ bench/results/*.json
 coverage/
 .DS_Store
 .jevclaude/
+drafts/
