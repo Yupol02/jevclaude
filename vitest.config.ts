@@ -15,6 +15,8 @@ export default defineConfig({
         "src/driver/**/driver.ts",
         "src/driver/**/wda.ts",
         "src/driver/**/uia2.ts",
+        "src/driver/**/cdp.ts",
+        "src/driver/**/adb.ts",
         "src/driver/**/simctl.ts",
         "src/driver/select.ts",
       ],
