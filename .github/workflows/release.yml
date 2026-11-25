@@ -20,9 +20,11 @@ jobs:
       - run: npm run lint && npm run typecheck && npm test && npm run build
       - name: Check tag matches package.json
         run: test "v$(node -p 'require("./package.json").version')" = "${GITHUB_REF_NAME}"
-      # No NPM_TOKEN: npm authenticates this workflow through the Trusted Publisher
-      # configured on npmjs.com (Yupol02/jevclaude, release.yml) and signs provenance.
-      - run: npm publish --access public
+      # npm first tries Trusted Publishing (OIDC: Yupol02/jevclaude, release.yml). If no trusted
+      # publisher matches this repository, it falls back to the NPM_TOKEN secret when one is set.
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

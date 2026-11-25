@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 - **UiAutomator2 sessions set `ignoreUnimportantViews`.** On the four apps measured, reads were 15–60 ms faster with the same elements. `JEVCLAUDE_FULL_TREE=1` turns it off.
 - **Launch prep runs in parallel:** clearing logs and force-stopping the app.
+- **The release workflow falls back to an `NPM_TOKEN` secret** when no npm Trusted Publisher matches the repository (e.g. after the repository is recreated). Provenance is signed either way.
 
 ### Added
 - **README: stock-app benchmark against plain Claude Code.** Samsung Calculator, 3 runs each, all passed: median 4.9 s and ≈ $0.00013 for JevClaude, against 52.6 s and ≈ $0.19 for `claude -p` with adb.
