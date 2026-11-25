@@ -15,7 +15,11 @@ Claude test akışını bir kez yazar. Yerel bir çalıştırıcı (runner) ciha
 Tekrar çalıştırmalarda önbellek devreye girer ve model çağrısı yapılmaz. Claude yalnızca bir şey bozulduğunda ya da Jev emin olmadığında devreye girer; kararını verip testi **kaldığı yerden devam ettirebilir**.
 
 
-**Gerçek uygulamada ölçüldü** (Galaxy S22 Ultra, 3'er çalıştırma): aynı "etkinlik oluştur" testinin medyanı JevClaude ile **47 sn ve ≈ 0,0008 $**, düz Claude Code ile **90 sn ve ≈ 0,28 $**. Akış bir kez yazıldıktan sonra çalıştırma başına yaklaşık 1,9 kat daha hızlı ve 350 kat daha ucuz. İki yöntem de 3'te 2 geçti, hiçbiri yanlış "geçti" demedi. Örneklem küçük; ayrıntılar ve uyarılar için [README.md](README.md#benchmark) dosyasına bak.
+**Ölçüldü** (Galaxy S22 Ultra, aynı görev, 3'er çalıştırma):
+- **Samsung Hesap Makinesi** (12 × 7, "=" basmadan önizlemeyi kontrol et, temizle): JevClaude medyanı **4,9 sn ve ≈ 0,00013 $**, düz Claude Code **52,6 sn ve ≈ 0,19 $**. Yani yaklaşık 11 kat daha hızlı ve 1.400 kat daha ucuz. İki yöntem de 3/3 geçti.
+- **Gerçek bir Compose uygulaması** (etkinlik oluşturma, eski sürüm, yavaş sürücü): 47 sn'ye karşı 90 sn, ≈ 0,0008 $'a karşı 0,28 $.
+
+Hepsi akış bir kez yazıldıktan sonraki çalıştırma başına. Örneklem küçük; ayrıntılar için [README.md](README.md#benchmark) dosyasına bak.
 
 ## Neden?
 

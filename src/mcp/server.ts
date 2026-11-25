@@ -54,7 +54,7 @@ function gc() {
 
 export async function startMcpServer(): Promise<void> {
   loadDotEnv();
-  const server = new McpServer({ name: "jevclaude", version: "0.2.4" });
+  const server = new McpServer({ name: "jevclaude", version: "0.2.5" });
 
   server.registerTool("list_devices", { description: "List Android devices (adb) and booted iOS simulators." }, async () => {
     try {

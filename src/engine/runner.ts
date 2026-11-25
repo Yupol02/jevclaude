@@ -187,8 +187,7 @@ export class Runner {
     this.queue = [...flow.steps];
     this.results = [];
     this.t0 = performance.now();
-    await this.driver.markLogs();
-    if (flow.fresh_start) await this.driver.stop(flow.app);
+    await Promise.all([this.driver.markLogs(), flow.fresh_start ? this.driver.stop(flow.app) : undefined]);
     return this.loop();
   }
 

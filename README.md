@@ -47,7 +47,14 @@ When Claude Code tests an app by driving the device itself, every step is a full
 
 Jev input costs about $0.042 per million tokens, and output is free.
 
-**Measured on a real app** (details in [Benchmark](#benchmark)): creating an event in a real Android app took a median of **47 s and ≈ $0.0008 per run** with JevClaude, against **90 s and ≈ $0.28** when plain Claude Code drove the same phone. That is about 1.9× faster and about 350× cheaper per run, once the flow is written. Both methods passed 2 of 3 runs. The sample is small; read the caveats before quoting it.
+**Measured, same phone, same task** (details in [Benchmark](#benchmark)):
+
+| Task | JevClaude (median) | Plain Claude Code (median) | Per run |
+|---|---|---|---|
+| Samsung Calculator: 12 × 7, check the preview, clear (3 runs each, all passed) | **4.9 s · ≈ $0.00013** | 52.6 s · ≈ $0.19 | ~11× faster, ~1,400× cheaper |
+| Real Compose app: create an event (3 runs each, 2/3 passed each; older JevClaude, slow backend) | 47 s · ≈ $0.0008 | 90 s · ≈ $0.28 | ~1.9× faster, ~350× cheaper |
+
+All per run, once the flow is written. The samples are small; read the caveats before quoting them.
 
 ## Quick start
 
@@ -181,9 +188,24 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 
 It prints pass rate, median time, tokens and cost.
 
+### Stock app: JevClaude vs plain Claude Code (0.2.5)
+
+Task: in Samsung Calculator, enter 12 × 7 with the on-screen keys, check that the live preview shows 84 *without* pressing "=" (so nothing goes into the calculator history), then clear. Plain Claude Code (`claude -p`, adb only, screenshots allowed) got the same instructions. Each method ran 3 times on 2026-11-25 on a Galaxy S22 Ultra.
+
+| | JevClaude ([samsung-calculator.yaml](examples/flows/samsung-calculator.yaml); run 1 cold cache) | Plain Claude Code |
+|---|---|---|
+| Passed | 3/3 | 3/3 (by its own report; each said it never pressed "=") |
+| Run times | 5.5 · 4.9 · 4.9 s | 53.6 · 52.6 · 39.2 s |
+| **Median** | **4.9 s** | **52.6 s** |
+| Tokens per run | 3.2–9.4 k (Jev) | 0.48–0.78 M (Claude, mostly cache reads) |
+| **Median cost** | **≈ $0.00013** | **≈ $0.19** |
+| Model | jev-1.14.0, 3–6 calls | claude-sonnet-5-5, 15–18 turns |
+
+Plain Claude read the screen with `uiautomator dump` (~2.3 s per read) and spent a model turn on every step. JevClaude replays a cached flow: three of its ten steps are exact ids, and only the risk check and the one `expect:` reach Jev.
+
 ### Real app: JevClaude vs plain Claude Code
 
-On 2026-11-25 the same task was run 3 times with each method on a Galaxy S22 Ultra (Android 16). The task is "add a new event": title, date picker (30 Nov 2026), content, time picker (18:00), then *create*, then check it is listed. The app is the author's own Jetpack Compose app, version 1.8.
+On 2026-11-25 the same task was run 3 times with each method on a Galaxy S22 Ultra (Android 16). The task is "add a new event": title, date picker (30 Nov 2026), content, time picker (18:00), then *create*, then check it is listed. The app is a real Jetpack Compose app that isn't public, so its screens aren't shown here.
 
 Every claimed pass was checked independently by reading the event list afterwards. The checker found the title, date and time, with exactly one copy.
 

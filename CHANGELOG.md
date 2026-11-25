@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] — 2026-11-25
+
+### Changed
+- **UiAutomator2 sessions set `ignoreUnimportantViews`.** On the four apps measured, reads were 15–60 ms faster with the same elements. `JEVCLAUDE_FULL_TREE=1` turns it off.
+- **Launch prep runs in parallel:** clearing logs and force-stopping the app.
+
+### Added
+- **README: stock-app benchmark against plain Claude Code.** Samsung Calculator, 3 runs each, all passed: median 4.9 s and ≈ $0.00013 for JevClaude, against 52.6 s and ≈ $0.19 for `claude -p` with adb.
+
 ## [0.2.4] — 2026-11-25
 
 Found by testing stock Samsung apps (Calculator, Clock, Settings); all three example flows now pass 3/3.

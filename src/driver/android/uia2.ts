@@ -76,7 +76,12 @@ export class Uia2Client {
     if (!this.session) throw new Error("UiAutomator2 server returned no session id");
     // Don't let the server wait for the UI to go idle before each read (it waited up to the default
     // 10 s on animations, e.g. a tap ripple): the runner checks stability itself with repeated reads.
-    await this.req("POST", `/session/${this.session}/appium/settings`, { settings: { waitForIdleTimeout: 0 } }).catch(() => {});
+    // ignoreUnimportantViews drops layout-only nodes from the page source: same elements for us, 15–60 ms
+    // faster reads on the apps we measured. JEVCLAUDE_FULL_TREE=1 turns it off if an app needs them.
+    const fullTree = process.env.JEVCLAUDE_FULL_TREE === "1";
+    await this.req("POST", `/session/${this.session}/appium/settings`, {
+      settings: { waitForIdleTimeout: 0, ignoreUnimportantViews: !fullTree },
+    }).catch(() => {});
   }
 
   async source(): Promise<string> {
