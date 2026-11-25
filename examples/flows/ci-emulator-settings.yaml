@@ -11,5 +11,5 @@ steps:
   - back
   - wait_for: "Connected devices"
   - tap: { text: "About emulated device" } # below the fold: the runner scrolls to find it
-  - wait_for: "Android version"
+  - wait_for: "Device name" # top of the About page ("Android version" is below the fold)
   - back
