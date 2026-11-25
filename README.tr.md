@@ -18,12 +18,16 @@ Tekrar çalıştırmalarda önbellek devreye girer ve model çağrısı yapılma
 **Ölçüldü** (Galaxy S22 Ultra, aynı görev, 3'er çalıştırma):
 - **Samsung Hesap Makinesi** (12 × 7, "=" basmadan önizlemeyi kontrol et, temizle): JevClaude medyanı **4,9 sn ve ≈ 0,00013 $**, düz Claude Code **52,6 sn ve ≈ 0,19 $**. Yani yaklaşık 11 kat daha hızlı ve 1.400 kat daha ucuz. İki yöntem de 3/3 geçti.
 - **Gerçek bir Compose uygulaması** (etkinlik oluşturma, eski sürüm, yavaş sürücü): 47 sn'ye karşı 90 sn, ≈ 0,0008 $'a karşı 0,28 $.
+- **İkinci bir gerçek uygulama** (Galaxy S23 FE, 4 sekmelik salt okunur tur, Türkçe arama dahil): JevClaude **13,0 sn ve ≈ 0,00024 $** (3/3), düz Claude Code 98,2 sn ve ≈ 0,36 $ (2/3; `adb` "ş" ve "ı" yazamadığı için bir kez kaybetti).
+- **Maestro 2.12.1** (S23 FE, aynı Hesap Makinesi adımları): akış 26 sn, açılışla birlikte 60–63 sn, 4/5. JevClaude: 6,7–7,8 sn, 5/5.
 
 Hepsi akış bir kez yazıldıktan sonraki çalıştırma başına. Örneklem küçük; ayrıntılar için [README.md](README.md#benchmark) dosyasına bak.
 
 **0.3.0 son kontrol:** Hesap Makinesi, Saat, Ayarlar ve Play Store akışları 3'er kez çalıştı; 15 çalıştırmanın hepsi geçti (çalıştırma başına 4,6–7,7 sn). Yanlış beklentiler p = 0,01 ile başarısız oldu. Risk koruması Play Store'daki "Yükle" butonunu engelliyor (p = 0,81–0,87). Jev'e giden ekran özetinde e-posta, telefon ve kart/IBAN numaraları maskeleniyor.
 
 **0.4.0 — web sayfaları:** Chrome öndeyken sayfa içeriği Chrome DevTools üzerinden okunuyor (metinler, bağlantılar, butonlar, giriş kutuları). Böylece `see`, `tap`, `type` ve `expect` web sayfalarında da çalışıyor; Türkçe arama dahil örnek akış telefonda 6/6 geçti. Yeni `open:` adımı bir URL'yi ya da derin bağlantıyı doğrudan açıyor.
+
+**0.4.1 — ikinci telefon:** Akışlar Galaxy S23 FE'de değiştirilmeden çalıştırıldı. Bulunan hatalar düzeltildi: kayarak açılan ekranlarda (ör. Hesap Makinesi tuş takımı) erken dokunma, kaydırma bitmeden dokunma, Chrome'un otomatik çevirisiyle değişen bağlantı metinleri (bağlantılar artık gittiği adresi de taşıyor) ve her çalıştırmada biriken `adb forward` kayıtları. `expect:` artık p ≥ 0,75'te geçiyor.
 
 ## Neden?
 

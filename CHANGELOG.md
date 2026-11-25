@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.1] — 2026-11-25
 
 ### Added
 - **The repository runs JevClaude on itself in CI:** `.github/workflows/e2e-android.yml` boots an API 34 emulator on GitHub Actions and runs `examples/flows/ci-emulator-settings.yaml` without a Jev key. It passes in about 22 s.
