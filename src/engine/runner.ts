@@ -10,6 +10,7 @@ import {
   type UiElement,
   type UiSnapshot,
   uniqueSelector,
+  webContentHidden,
 } from "../core/uitree.js";
 import { type Driver, sleep } from "../driver/types.js";
 import type { JevAnswer, JevClient } from "../jev/client.js";
@@ -25,8 +26,13 @@ import { SelectorCache } from "./cache.js";
 import { describeStep, describeTarget, type Flow, interpolate, type Step, type Target } from "./flow.js";
 
 export interface RunnerConfig {
-  /** noul ≥ pass ⇒ passed */
+  /**
+   * `expect:` passes at noul ≥ pass. 0.80: on real devices correct screens scored 0.70–0.98 (mostly
+   * ≥ 0.80) while wrong ones scored ≤ 0.19, so 0.85 sent too many correct screens to Claude.
+   */
   pass: number;
+  /** "Is an error visible?" fails the step at noul ≥ errorFail (kept stricter: field hints score up to ~0.7). */
+  errorFail: number;
   /** noul ≤ fail ⇒ failed; anything between is "uncertain" and goes back to Claude. */
   fail: number;
   /** Minimum choice confidence to act on Jev's element pick. */
@@ -63,7 +69,8 @@ export interface RunnerConfig {
 }
 
 export const DEFAULT_CONFIG: RunnerConfig = {
-  pass: 0.85,
+  pass: 0.8,
+  errorFail: 0.85,
   fail: 0.15,
   minPickConfidence: 0.6,
   riskBlock: 0.5,
@@ -486,7 +493,7 @@ export class Runner {
           exhausted = true;
           if (deferPick) continue;
         }
-        return new Outcome("failed", askPick ? "jev" : "deterministic", `no element matches "${targetText}"`, {
+        return new Outcome("failed", askPick ? "jev" : "deterministic", `no element matches "${targetText}"${webHint(snap)}`, {
           ...(scrolls ? { scrolls } : {}),
         });
       }
@@ -618,7 +625,7 @@ export class Runner {
     if (this.config.errorCheck === "auto" && !looksLikeError(snap)) return new Outcome("passed", "deterministic");
     const res = await this.jev.ask(afterActionRequest(snap, { checkErrors: true }));
     const p = noul(res.answers.error);
-    if (p >= this.config.pass) return new Outcome("failed", "jev", `error visible on screen (p=${p.toFixed(2)})`, { probability: p });
+    if (p >= this.config.errorFail) return new Outcome("failed", "jev", `error visible on screen (p=${p.toFixed(2)})`, { probability: p });
     return new Outcome("passed", "jev", undefined, { probability: 1 - p });
   }
 
@@ -663,7 +670,11 @@ export class Runner {
       const snap = await this.snapshot(!first);
       if (screenContains(snap, needle) === shouldSee) return new Outcome("passed", "deterministic");
       if (performance.now() > deadline) {
-        return new Outcome("failed", "deterministic", shouldSee ? `"${text}" not on screen` : `"${text}" is still on screen`);
+        return new Outcome(
+          "failed",
+          "deterministic",
+          shouldSee ? `"${text}" not on screen${webHint(snap)}` : `"${text}" is still on screen`,
+        );
       }
       await sleep(this.driver.fastSnapshot ? 250 : 500);
     }
@@ -683,7 +694,7 @@ export class Runner {
         const p = noul(res.answers.expect);
         const err = noul(res.answers.error);
         if (p >= this.config.pass) return new Outcome("passed", "jev", undefined, { probability: p });
-        const detail = `p=${p.toFixed(2)}${err >= this.config.pass ? `, error visible (p=${err.toFixed(2)})` : ""}`;
+        const detail = `p=${p.toFixed(2)}${err >= this.config.errorFail ? `, error visible (p=${err.toFixed(2)})` : ""}`;
         last = new Outcome(p <= this.config.fail ? "failed" : "uncertain", "jev", detail, { probability: p });
       }
       if (performance.now() > deadline) return last!;
@@ -710,4 +721,10 @@ function topOptions(probs: Record<string, number>, snap: UiSnapshot): string {
       return `${el ? JSON.stringify(labelOf(el)) : k} ${p.toFixed(2)}`;
     })
     .join(", ");
+}
+
+function webHint(snap: UiSnapshot): string {
+  return webContentHidden(snap)
+    ? " (the page is a web view whose content isn't exposed to UiAutomator right now; see README › Status and limits)"
+    : "";
 }

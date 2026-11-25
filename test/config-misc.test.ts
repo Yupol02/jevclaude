@@ -14,7 +14,7 @@ import { FAST, FakeDriver, FakeJev, fixture, pick, safeJev, yes } from "./helper
 describe("config", () => {
   it("the generated default config is valid and maps onto runner settings", () => {
     const cfg = ConfigSchema.parse(YAML.parse(DEFAULT_CONFIG_YAML));
-    expect(runnerConfigFrom(cfg)).toMatchObject({ pass: 0.85, fail: 0.15, riskBlock: 0.5, maxScrolls: 5 });
+    expect(runnerConfigFrom(cfg)).toMatchObject({ pass: 0.8, fail: 0.15, riskBlock: 0.5, maxScrolls: 5 });
     expect(cfg.android?.backend).toBe("auto");
   });
 

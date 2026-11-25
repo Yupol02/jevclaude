@@ -2,7 +2,24 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [0.2.5] — 2026-11-25
+## [0.3.0] — 2026-11-25
+
+The final round of hardening, checked on Calculator, Clock, Settings and Play Store (15/15 runs passed, 4.6–7.7 s each) plus two negative controls.
+
+### Changed
+- **`expect:` passes at p ≥ 0.80 (was 0.85).** On the phone, correct screens scored 0.70–0.98 (mostly ≥ 0.80) and wrong ones 0.01–0.19. At 0.85, correct screens kept landing at 0.82–0.84 and were sent to Claude.
+- **The error check has its own threshold,** `error_fail: 0.85`, so it doesn't get more sensitive along with `pass`.
+- **Installing, updating or uninstalling an app counts as risky.** A real Play Store "Install" button went from p = 0.08–0.12 (allowed) to 0.81–0.87 (blocked); back, scroll and screenshot taps stayed at 0.03.
+
+### Added
+- **Personal-data masking in what is sent to Jev:** e-mail addresses, phone numbers and card/IBAN-like numbers. A Play Store screen had put the signed-in account's e-mail into the Jev state.
+- **A clear message when a web view's content isn't exposed** to UiAutomator: Chrome showed only an empty "Web View" for a Wikipedia article. This is documented as a known limit.
+- `examples/flows/playstore-search.yaml`.
+
+### Fixed
+- Numeric character references in the UI tree (e.g. `&#10;` inside a content description) are decoded.
+
+## [0.2.5] — 2026-11-25 (tagged but not published to npm; included in 0.3.0)
 
 ### Changed
 - **UiAutomator2 sessions set `ignoreUnimportantViews`.** On the four apps measured, reads were 15–60 ms faster with the same elements. `JEVCLAUDE_FULL_TREE=1` turns it off.

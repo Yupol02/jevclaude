@@ -205,3 +205,16 @@ const DIALOG_CLASS = /^(Alert|AlertDialog|Dialog|Sheet)$/i;
 export function looksLikeError(snap: UiSnapshot): boolean {
   return snap.elements.some((el) => DIALOG_CLASS.test(el.cls) || ERROR_HINT.test(`${el.text}\n${el.desc}`));
 }
+
+/**
+ * True when the screen is dominated by a web view whose content isn't in the accessibility tree
+ * (Chrome and some WebViews expose it only intermittently to UiAutomator).
+ */
+export function webContentHidden(snap: UiSnapshot): boolean {
+  const web = snap.elements.some((el) => /WebView/i.test(el.cls) || /^(web ?view|web görüntüleme)$/i.test(el.desc || el.text));
+  if (!web) return false;
+  const textual = snap.elements.filter(
+    (el) => !el.clickable && (el.text || el.desc) && !/^(web ?view|web görüntüleme)$/i.test(el.desc || el.text),
+  );
+  return textual.length <= 2;
+}

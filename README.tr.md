@@ -21,6 +21,8 @@ Tekrar çalıştırmalarda önbellek devreye girer ve model çağrısı yapılma
 
 Hepsi akış bir kez yazıldıktan sonraki çalıştırma başına. Örneklem küçük; ayrıntılar için [README.md](README.md#benchmark) dosyasına bak.
 
+**0.3.0 son kontrol:** Hesap Makinesi, Saat, Ayarlar ve Play Store akışları 3'er kez çalıştı; 15 çalıştırmanın hepsi geçti (çalıştırma başına 4,6–7,7 sn). Yanlış beklentiler p = 0,01 ile başarısız oldu. Risk koruması Play Store'daki "Yükle" butonunu engelliyor (p = 0,81–0,87). Jev'e giden ekran özetinde e-posta, telefon ve kart/IBAN numaraları maskeleniyor.
+
 ## Neden?
 
 Claude Code telefonu kendisi sürdüğünde her adım tam bir LLM turu oluyor: ekran görüntüsü, okuma, düşünme, aksiyon. Bu hem yavaş hem pahalı. Oysa bu kararların çoğu küçük ve tiplidir: "Bu 30 elemandan hangisi giriş butonu?", "Ekranda sepet görünüyor mu, evet/hayır?". JevClaude'da her adım şu sırayla çözülür:

@@ -25,6 +25,7 @@ export const ConfigSchema = z
       .object({
         pass: prob.optional(),
         fail: prob.optional(),
+        error_fail: prob.optional(),
         min_pick_confidence: prob.optional(),
         risk_block: prob.optional(),
         risk_guard: z.boolean().optional(),
@@ -58,6 +59,7 @@ export function runnerConfigFrom(cfg: Config): Partial<RunnerConfig> {
   const out: Partial<RunnerConfig> = {};
   if (r.pass !== undefined) out.pass = r.pass;
   if (r.fail !== undefined) out.fail = r.fail;
+  if (r.error_fail !== undefined) out.errorFail = r.error_fail;
   if (r.min_pick_confidence !== undefined) out.minPickConfidence = r.min_pick_confidence;
   if (r.risk_block !== undefined) out.riskBlock = r.risk_block;
   if (r.risk_guard !== undefined) out.riskGuard = r.risk_guard;

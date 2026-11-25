@@ -12,11 +12,11 @@ Please report vulnerabilities privately through GitHub's "Report a vulnerability
 
 ## What leaves your machine
 
-Each Jev call sends a compact text dump of the current screen to the configured provider (TypeSafe or Cloudflare). Screenshots and videos stay local in `reports/`. Don't test production accounts or screens with personal data you can't share with that provider.
+Each Jev call sends a compact text dump of the current screen to the configured provider (TypeSafe or Cloudflare). Before it is sent, e-mail addresses, phone numbers and card/IBAN-like numbers are replaced with `<email>`, `<phone>`, `<card-number>` and `<iban>`. Names and other free text are not masked, so don't test production accounts or screens with personal data you can't share with that provider. Screenshots and videos stay local in `reports/`.
 
 ## Risk guard
 
-Before each tap or type, Jev is asked whether the action is risky: money, deleting data or accounts, messaging other people, or security/account changes. At or above `risk_block` the step is **blocked**.
+Before each tap or type, Jev is asked whether the action is risky: money, installing/updating/uninstalling apps, deleting data or accounts, messaging other people, or security/account changes. At or above `risk_block` the step is **blocked**.
 
 The guard is not a sandbox. It is a second line of defence, so test on test accounts and test devices.
 

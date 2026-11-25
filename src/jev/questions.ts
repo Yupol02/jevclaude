@@ -13,8 +13,20 @@ export const NONE_OPTION = "none";
 export function screenState(snap: UiSnapshot, extra: Record<string, JSONValue> = {}): Record<string, JSONValue> {
   return {
     ...extra,
-    SCREEN: `<<<SCREEN\n${describeSnapshot(snap)}\nSCREEN>>>`,
+    SCREEN: `<<<SCREEN\n${redactPII(describeSnapshot(snap))}\nSCREEN>>>`,
   };
+}
+
+/**
+ * Mask personal data before the screen leaves the machine for Jev: e-mail addresses, phone numbers
+ * and card/IBAN-like digit runs. Local matching (see:, selectors) still uses the real text.
+ */
+export function redactPII(text: string): string {
+  return text
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "<email>")
+    .replace(/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?\b/g, "<iban>")
+    .replace(/(?<![\d.,:])\d(?:[ -]?\d){12,18}(?![\d.,:])/g, "<card-number>")
+    .replace(/(?<![\w.,:])\+?\d[\d ()-]{8,}\d(?![\w.,:])/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "<phone>" : m));
 }
 
 export function candidatesFor(snap: UiSnapshot, kind: "tap" | "type"): UiElement[] {
@@ -70,9 +82,9 @@ export function errorScreenQuestion(): JevQuestion {
 export function actionRiskQuestion(action: string): JevQuestion {
   return {
     type: "noul",
-    instructions: `${UNTRUSTED_NOTE}\nThe test is about to perform: "${action}". Is this action risky — does it spend real money, buy or subscribe, permanently delete data or an account, send a message/email/post to other people, or change security or account settings?`,
+    instructions: `${UNTRUSTED_NOTE}\nThe test is about to perform: "${action}". Is this action risky — does it spend real money, buy or subscribe, install, update or uninstall an app, permanently delete data or an account, send a message/email/post to other people, or change security or account settings?`,
     criteria: {
-      true: "Risky: financial, destructive, outward-facing or a security/account change.",
+      true: "Risky: financial, installs/uninstalls software, destructive, outward-facing or a security/account change.",
       false: "Safe: navigation, typing test data, opening screens, toggling harmless UI.",
     },
   };

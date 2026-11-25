@@ -14,6 +14,8 @@ const parser = new XMLParser({
   // Keep values as strings: resource ids like "123" must not become numbers.
   parseAttributeValue: false,
   parseTagValue: false,
+  // Decode numeric character references such as &#10; (newlines inside content-desc).
+  htmlEntities: true,
 });
 
 type Ordered = Record<string, unknown> & { ":@"?: Record<string, string> };

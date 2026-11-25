@@ -149,30 +149,34 @@ Exit codes: 0 if everything passed, 1 otherwise.
 | Question | How | Rule (configurable in `jevclaude.config.yaml`) |
 |---|---|---|
 | Which element is "the login button"? | exact match → cache → Jev `choice` over on-screen elements | confidence below 0.6 → `uncertain`; `none` → scroll, then `failed` |
-| Does the screen match `expect:`? | Jev `noul` | p ≥ 0.85 passed · p ≤ 0.15 failed · otherwise `uncertain` → Claude |
-| Is an error or crash visible after an action? | logcat / crash reports, then Jev `noul` | crash or p ≥ 0.85 → `failed` |
-| Is this tap or type risky? | Jev `noul`, asked together with the pick and cached once it's known to be safe | p ≥ 0.5 → `blocked` until the user allows it |
+| Does the screen match `expect:`? | Jev `noul` | p ≥ 0.80 passed · p ≤ 0.15 failed · otherwise `uncertain` → Claude. On the phone, correct screens scored 0.70–0.98 (mostly ≥ 0.80) and wrong ones 0.01–0.19 |
+| Is an error or crash visible after an action? | crash logs on failure and at the end; Jev `noul` only when error-like text or a dialog is on screen (`error_check: auto`) | crash or p ≥ 0.85 (`error_fail`) → `failed` |
+| Is this tap or type risky (money, install/uninstall, deletion, messaging, account/security)? | Jev `noul`, asked together with the pick and cached once it's known to be safe | p ≥ 0.5 → `blocked` until the user allows it. Play Store "Install" scored 0.81–0.87; back / scroll / screenshots 0.03 |
 | Permission dialog? | package / alert detection, button by regex, then Jev | per-flow `permissions:` policy |
 | Still loading? | progress-indicator detection | wait up to 15 s |
 
-Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every question tells Jev to treat it as data, so text inside the app under test can't steer decisions.
+Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every question tells Jev to treat it as data, so text inside the app under test can't steer decisions. Before it leaves the machine, e-mail addresses, phone numbers and card/IBAN-like numbers are masked (`<email>`, `<phone>`, …).
 
 ## Status and limits
 
 - **What's verified:**
-  - 53 unit tests, 89% line coverage, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
+  - 65 unit tests, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
   - The live Jev API is checked with `npm run jev:smoke`.
   - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI. Verified there:
     - both backends, the replay cache and `run_flow` → `resume_flow` over MCP
     - a production Jetpack Compose app, including Unicode typing into Compose fields and date/time fields that have no accessibility label
+    - stock apps: Calculator, Clock, Settings and Play Store, all passing 3/3 at 4.6–7.7 s per run
+    - negative controls: wrong expectations fail at p = 0.01
+    - the risk guard on a real Play Store page: "Install" is blocked, harmless actions are allowed (asked without tapping)
     - results are below
 - **What's not verified yet:**
   - iOS on a live simulator.
-  - The risk guard and permission dialogs on a device (they are covered by unit tests only).
+  - Permission dialogs on a device (covered by unit tests only).
   - See the [e2e checklist](CONTRIBUTING.md#end-to-end-checklist).
 - **Jev's weak spots:** counting, arithmetic and multi-hop reasoning. Check numbers with `see:`.
 - **Literal reading:** Jev takes wording literally. "Results are shown *under* the search field" correctly scored 0.19 on a phone whose search bar sits *below* the results. Describe what must be true, not where it is.
 - **Text-only:** canvas, games and Flutter apps without semantics produce empty trees. Those need Claude with screenshots.
+- **Web pages in Chrome:** Chrome exposes page content to UiAutomator only some of the time. example.com showed its text; a Wikipedia article showed only an empty "Web View", even after scrolling and with every tree setting tried. Browser chrome (address bar, tabs, menus) works. A failing step on such a screen says so in its message. Reading pages through the Chrome DevTools protocol is the planned fix.
 - **Unlabeled controls:** a tap target with no label gets the text it touches as a `near="…"` hint (e.g. a date field's "Date is required" message). It works, but adding a `contentDescription` / `semantics` label to the app is more reliable, and better for accessibility.
 - **Don't record the screen in parallel:** a `screencap` loop running next to a test slowed the phone enough to break UiAutomator2 calls. Use `--trace` (one screenshot per step) or `--record`.
 - **Android typing:** the adb-only backend types ASCII only. `setup android` enables Unicode.
@@ -187,6 +191,20 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 - optionally Maestro
 
 It prints pass rate, median time, tokens and cost.
+
+### 0.3.0 final check (stock apps, same phone, stable cable)
+
+Each flow was run 3 times; run 1 had a cold cache for new flows. All 15 runs passed.
+
+| Flow | Time per run | Jev calls | Notes |
+|---|---|---|---|
+| [samsung-calculator](examples/flows/samsung-calculator.yaml) | 4.6–5.4 s | 3–6 | |
+| [samsung-stopwatch](examples/flows/samsung-stopwatch.yaml) | 5.0–6.3 s | 0–5 | includes a 1.5 s `wait` |
+| [settings-search-unicode](examples/flows/settings-search-unicode.yaml) | 4.7–7.7 s | 1–3 | types `parlaklık` |
+| [settings-smoke](examples/flows/settings-smoke.yaml) | 5.8–6.3 s | 3–6 | 3 scrolls |
+| [playstore-search](examples/flows/playstore-search.yaml) | 5.1–5.4 s | 1 | `expect` scored 0.82–0.84: `uncertain` at the old 0.85 threshold, passed at 0.80 |
+
+Negative controls: "the result preview shows 85" on a screen showing 84, and "a WhatsApp chat is open" in Settings, both failed at p = 0.01. One earlier Play Store run stopped with "error visible": the store really showed "Bir sorun oluştu / Sunucu hatası" (a server error), and the next runs passed.
 
 ### Stock app: JevClaude vs plain Claude Code (0.2.5)
 

@@ -1,0 +1,12 @@
+# Search the Play Store for an app and check the results; nothing is installed.
+name: play store search
+app: com.android.vending
+platform: android
+fresh_start: true
+steps:
+  - launch
+  - tap: "the Search tab in the bottom navigation"
+  - tap: "the search field"
+  - type: { into: "the search text field", text: "Wikipedia", submit: true }
+  - wait_for: "Wikimedia"
+  - expect: "Play Store search results for Wikipedia are shown"
