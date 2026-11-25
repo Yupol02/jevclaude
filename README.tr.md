@@ -6,7 +6,7 @@
 
 **Claude Code için token yakmayan mobil uygulama testi.** Android gerçek telefonda doğrulandı; iOS (simülatör) desteği yazıldı ama henüz deneysel.
 
-Claude test akışını bir kez yazar. Yerel bir çalıştırıcı (runner) cihazı yönetir. Adım başına küçük kararları [TypeSafe Jev](https://docs.typesafe.ai) yaklaşık 200 ms'de verir:
+Claude **neyin** test edileceğine karar verir ve bunu sade Türkçe ya da İngilizce kısa bir plan dosyasına yazar (`CihazdaTestEdilecek.md`, `.txt` ya da `.pdf`). JevClaude planın tamamını telefonda tek çağrıda çalıştırır ve yalnızca sonuçları geri gönderir. Adımlar ve cihaz durumları (fener açık mı, arama başladı mı, alarm kuruldu mu) kurallarla, model çağrılmadan okunur. Geriye kalan bulanık kararları [TypeSafe Jev](https://docs.typesafe.ai) yaklaşık 200 ms'de verir:
 - hangi elemana dokunulacak
 - adım geçti mi
 - ekranda hata var mı
@@ -27,6 +27,8 @@ Hepsi akış bir kez yazıldıktan sonraki çalıştırma başına. Örneklem k�
 
 **0.4.0 — web sayfaları:** Chrome öndeyken sayfa içeriği Chrome DevTools üzerinden okunuyor (metinler, bağlantılar, butonlar, giriş kutuları). Böylece `see`, `tap`, `type` ve `expect` web sayfalarında da çalışıyor; Türkçe arama dahil örnek akış telefonda 6/6 geçti. Yeni `open:` adımı bir URL'yi ya da derin bağlantıyı doğrudan açıyor.
 
+**0.5.0 — test planları:** Claude Code `CihazdaTestEdilecek.md` yazar, JevClaude onu tek çağrıda çalıştırır; fener, arama, alarm gibi durumlar doğrudan telefondan okunur. Gerçek telefonda CLI ile doğrulandı. Claude Code'un skill ile kendi başına plan yazıp `run_plan` çağırması henüz uçtan uca denenmedi.
+
 **0.4.1 — ikinci telefon:** Akışlar Galaxy S23 FE'de değiştirilmeden çalıştırıldı. Bulunan hatalar düzeltildi: kayarak açılan ekranlarda (ör. Hesap Makinesi tuş takımı) erken dokunma, kaydırma bitmeden dokunma, Chrome'un otomatik çevirisiyle değişen bağlantı metinleri (bağlantılar artık gittiği adresi de taşıyor) ve her çalıştırmada biriken `adb forward` kayıtları. `expect:` artık p ≥ 0,75'te geçiyor.
 
 ## Neden?
@@ -44,7 +46,7 @@ Claude Code telefonu kendisi sürdüğünde her adım tam bir LLM turu oluyor: e
 
 ```bash
 npm install && npm run build
-node dist/cli.js init            # config, örnek akış ve .env oluşturur
+node dist/cli.js init            # Claude Code skill'i, .mcp.json, config ve .env
 # .env dosyasına TYPESAFE_API_KEY yaz
 node dist/cli.js setup android   # opsiyonel: hızlı okuma + Türkçe karakter yazma (UiAutomator2)
 node dist/cli.js setup ios       # simülatörü açar, WebDriverAgent'ı kurar
@@ -52,15 +54,52 @@ node dist/cli.js doctor          # her şey hazır mı kontrol eder
 node dist/cli.js run examples/flows/settings-smoke.yaml --html rapor.html
 ```
 
-Claude Code'a bağlamak için:
+### Kendi projende kullanmak
 
-```bash
-claude mcp add jevclaude -- node /tam/yol/JevClaude/dist/cli.js mcp
+1. Uygulamanın deposunda:
+   ```bash
+   npx jevclaude init
+   ```
+   Bu komut Claude Code skill'ini (`.claude/skills/device-test/SKILL.md`) kurar, MCP sunucusunu `.mcp.json`'a ekler, `jevclaude.config.yaml` ve `.env` oluşturur. Telefona dokunmaz, örnek test eklemez.
+2. `.env` dosyasına `TYPESAFE_API_KEY` yaz.
+3. Telefonu USB hata ayıklama açık bağla: `npx jevclaude setup android && npx jevclaude doctor`
+4. Claude Code'a örneğin *"cihazda test et: asistana 'feneri aç' yazınca fener açılıyor mu?"* de. Claude kodundan kesin metinleri okur, `CihazdaTestEdilecek.md`'yi yazar, `run_plan` ile çalıştırır ve sonuçları söyler. Telefonu kendisi sürmez.
+
+## Test planı
+
+```markdown
+uygulama: com.ornek.asistan
+
+## Fener komutu
+1. Uygulamayı aç
+2. "Yaz ya da konuş" alanına "feneri aç" yaz ve gönder
+3. Kontrol: fener açık
+4. Kontrol: asistan feneri açtığını söylüyor
+
+## Annemi ara
+izin: arama
+1. Uygulamayı aç
+2. "Yaz ya da konuş" alanına "annemi ara" yaz ve gönder
+3. Kontrol: arama başladı
 ```
 
-Ardından Claude'a *"telefonumda giriş akışını test et"* demen yeterli.
+```bash
+npx jevclaude plan CihazdaTestEdilecek.md --check   # her satırın nasıl okunacağını gösterir, cihaz gerekmez
+npx jevclaude plan CihazdaTestEdilecek.md           # çalıştırır (MCP: run_plan)
+```
 
-## Örnek akış
+- **Aksiyonlar:** `Uygulamayı aç` (uygulamayı yeniden başlatır), `"X"e dokun`, `Varsa "X"e dokun`, `"Alan" alanına "metin" yaz ve gönder`, `Geri dön`, `Klavyeyi kapat`, `Aşağı kaydır`, `2 saniye bekle`, `"X" görünene kadar bekle`, `Aramayı kapat`.
+- **Cihaz durumu (model yok, telefondan okunur):** `Kontrol: fener açık`, `arama başladı`, `alarm 07:00`, `müzik çalıyor`, `Wi-Fi kapalı`, `Bluetooth açık`, `bildirim "…"`.
+- **Ekrandaki kesin metin (model yok):** `Kontrol: "Kaydedildi" görünüyor`, `Kontrol: "Hata" görünmüyor`.
+- **Diğer her cümle:** Jev ekrana bakarak karar verir.
+- Okunamayan bir satır, satır numarasıyla birlikte hata olarak bildirilir; plan asla yarım tahminle çalışmaz. Bir test başarısız olsa da diğerleri çalışır.
+- **Telefon araması varsayılan olarak engellidir.** `izin: arama` yazmayan bir testte uygulama arama başlatırsa arama hemen kapatılır ve adım BLOCKED olur. `izin: arama` varsa arama, `Kontrol: arama başladı` doğrulanınca hemen kapatılır. Testten önce zaten süren bir aramaya dokunulmaz.
+
+MCP'yi elle eklemek istersen: `claude mcp add jevclaude -- npx -y jevclaude mcp`
+
+## YAML akışları (ileri düzey)
+
+Planlar YAML akışlarına çevrilir. Plan biçiminin vermediği kontrol gerektiğinde (alt akışlar, `else`'li `if_visible`, zaman aşımları) akışı doğrudan da yazabilirsin:
 
 ```yaml
 name: giriş testi

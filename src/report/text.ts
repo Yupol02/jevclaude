@@ -39,6 +39,7 @@ export function formatReport(r: RunResult, usage?: Usage, extras: ReportExtras =
       `${ICON[s.status]} ${s.index + 1}. ${s.step}${meta.length ? ` [${meta.join(" ")}]` : ""}${s.detail ? ` — ${s.detail}` : ""}`,
     );
   }
+  for (const n of r.notes ?? []) lines.push(`Note: ${n}`);
   if (r.crashes.length) lines.push("", "Crashes:", ...r.crashes.slice(0, 3).map((c) => c.slice(0, 600)));
   if (r.failureScreen) lines.push("", "Screen at stop:", r.failureScreen);
   if (usage) {

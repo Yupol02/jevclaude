@@ -1,6 +1,6 @@
 {
   "name": "jevclaude",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Mobile app testing for Claude Code (Android; iOS simulator experimental): Claude plans a flow once, a local runner executes it, TypeSafe Jev makes cheap per-step decisions, a replay cache makes re-runs model-free.",
   "license": "MIT",
   "author": "Yusuf (https://github.com/Yupol02)",
@@ -18,6 +18,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -56,6 +57,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "fast-xml-parser": "^5.12.1",
+    "unpdf": "2.1.0",
     "yaml": "^2.9.1",
     "zod": "^3.25.76"
   },

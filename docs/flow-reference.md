@@ -11,6 +11,7 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
 | `platform` | | `android` or `ios`. Needed only when both kinds of device are connected |
 | `fresh_start` | | Stop the app before the first step |
 | `permissions` | | `allow`, `deny`, or `stop` (default). What to do when a system permission dialog appears |
+| `calls` | | `block`: a phone call the app starts is ended at once and the step is `blocked`. `allow`: calls may start; one is ended right after a `device: { call: active }` check passes. With either, a call still going at the end is ended (never one that was going before the flow). Unset: calls aren't watched. Plans set `block` unless a test says `izin: arama` |
 | `env` | | Default values for `${VAR}`. Environment variables override them |
 | `tags` | | Used by `jevclaude run --tag NAME` |
 
@@ -40,6 +41,7 @@ A flow is a YAML file: a header, then `steps`. Steps run top to bottom. The run 
 | `not_see` | `- not_see: "Error"` | Deterministic |
 | `wait_for` | `- wait_for: "Home"` | Deterministic. Like `see`, with a 10 s window |
 | `expect` | `- expect: "Cart shows the red sneakers"` | Jev. p ≥ 0.75 passes, p ≤ 0.15 fails, anything between is `uncertain`. Re-asked only when the screen changes |
+| `device` | `- device: { torch: on }` | Deterministic, read from the device (Android), retried for 8 s (calls: 20 s, since an assistant may ask and dial first). One of: `torch: on/off`, `call: active/idle`, `alarm: set/none/"07:00"` (next alarm clock), `media: playing/stopped`, `wifi`, `bluetooth`, `airplane: on/off`, `notification: "text"` (a posted notification contains it), `app: com.example.app` (in the foreground) |
 
 ### Control
 

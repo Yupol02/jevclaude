@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { CONFIG_FILE, DEFAULT_CONFIG_YAML, loadConfig } from "./config.js";
 import { Adb } from "./driver/android/adb.js";
@@ -143,29 +143,46 @@ export async function doctor(): Promise<{ ok: boolean; lines: string[] }> {
   return { ok, lines };
 }
 
-const EXAMPLE_FLOW = `# Example flow — change \`app\` to your package (Android) or bundle id (iOS).
-name: smoke
-app: com.example.app
-fresh_start: true
-permissions: stop        # allow | deny | stop when a system permission dialog shows up
-steps:
-  - launch
-  - expect: "The app's first screen is shown without errors"
-`;
+/** The skill shipped in the package (dist/setup.js → ../skills, src/setup.ts → ../skills). */
+const SKILL_SRC = new URL("../skills/device-test/SKILL.md", import.meta.url);
+const SKILL_DST = join(".claude", "skills", "device-test", "SKILL.md");
+const MCP_SERVER = { command: "npx", args: ["-y", "jevclaude", "mcp"] };
 
+/**
+ * Prepare a project: install the Claude Code skill, register the MCP server in .mcp.json, and
+ * create the config and .env. Touches no device and creates no example tests.
+ */
 export async function init(log: (m: string) => void) {
+  await mkdir(dirname(SKILL_DST), { recursive: true });
+  const skill = await readFile(SKILL_SRC, "utf8");
+  const had = existsSync(SKILL_DST);
+  await writeFile(SKILL_DST, skill);
+  log(`${had ? "updated" : "installed"} the Claude Code skill: ${SKILL_DST}`);
+
+  let mcp: { mcpServers?: Record<string, unknown> } = {};
+  if (existsSync(".mcp.json")) {
+    try {
+      mcp = JSON.parse(await readFile(".mcp.json", "utf8")) as typeof mcp;
+    } catch {
+      throw new Error(
+        ".mcp.json exists but isn't valid JSON; fix it or add the server with: claude mcp add jevclaude -- npx -y jevclaude mcp",
+      );
+    }
+  }
+  if (!mcp.mcpServers?.jevclaude) {
+    mcp.mcpServers = { ...mcp.mcpServers, jevclaude: MCP_SERVER };
+    await writeFile(".mcp.json", `${JSON.stringify(mcp, null, 2)}\n`);
+    log("registered the jevclaude MCP server in .mcp.json (Claude Code asks you to approve it once)");
+  }
   if (!existsSync(CONFIG_FILE)) {
     await writeFile(CONFIG_FILE, DEFAULT_CONFIG_YAML);
     log(`created ${CONFIG_FILE}`);
-  }
-  await mkdir("flows", { recursive: true });
-  if (!existsSync("flows/smoke.yaml")) {
-    await writeFile("flows/smoke.yaml", EXAMPLE_FLOW);
-    log("created flows/smoke.yaml");
   }
   if (!existsSync(".env")) {
     await writeFile(".env", "# Jev provider key (never commit this file)\nTYPESAFE_API_KEY=\n");
     log("created .env (add your TYPESAFE_API_KEY)");
   }
-  log("\nConnect Claude Code:\n  claude mcp add jevclaude -- npx -y jevclaude mcp");
+  log(
+    "\nNext: connect the phone (USB debugging on), run `npx jevclaude setup android` once, then ask Claude Code to test something on the device. It writes CihazdaTestEdilecek.md and runs it with run_plan.",
+  );
 }

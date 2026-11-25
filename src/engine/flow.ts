@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import YAML from "yaml";
 import { z } from "zod";
+import { type DeviceCheck, DeviceCheckSchema, describeCheck } from "../device/state.js";
 
 const Selector = z
   .object({ id: z.string().optional(), text: z.string().optional(), desc: z.string().optional() })
@@ -34,6 +35,7 @@ export type Step =
   | { see: string; optional?: boolean; timeout?: number }
   | { not_see: string; optional?: boolean; timeout?: number }
   | { expect: string; optional?: boolean; timeout?: number }
+  | { device: DeviceCheck; optional?: boolean; timeout?: number }
   | { allow_risky: true }
   | { run: string }
   | { if_visible: string; then: Step[]; else?: Step[] };
@@ -61,6 +63,8 @@ export const StepSchema: z.ZodType<Step> = z.lazy(() =>
     z.object({ not_see: z.string().min(1), ...common }).strict(),
     /** Fuzzy: Jev judges whether the screen matches this natural-language expectation. */
     z.object({ expect: z.string().min(1), ...common }).strict(),
+    /** Deterministic: a device state (flashlight, phone call, alarm, media, Wi-Fi, …) read from the device. */
+    z.object({ device: DeviceCheckSchema, ...common }).strict(),
     /** Allow the next tap/type even if Jev flags it as risky (the user must opt in explicitly). */
     z.object({ allow_risky: z.literal(true) }).strict(),
     /** Inline another flow file's steps (path relative to this flow). */
@@ -78,6 +82,12 @@ export const FlowSchema = z
     fresh_start: z.boolean().optional(),
     /** What to do when a system permission dialog appears. */
     permissions: z.enum(["allow", "deny", "stop"]).optional(),
+    /**
+     * Phone calls. `block`: if an action starts a call, it is ended at once and the step is blocked.
+     * `allow`: calls may start; one is ended right after a `device: { call: active }` check passes.
+     * Either way, a call still running at the end of the flow is ended. Unset: calls aren't watched.
+     */
+    calls: z.enum(["allow", "block"]).optional(),
     /** Flow-level variables for ${VAR}; environment variables override them. */
     env: z.record(z.string()).optional(),
     tags: z.array(z.string()).optional(),
@@ -158,6 +168,7 @@ export function describeStep(step: Step): string {
   if ("see" in step) return `see "${step.see}"${opt}`;
   if ("not_see" in step) return `not see "${step.not_see}"${opt}`;
   if ("expect" in step) return `expect "${step.expect}"${opt}`;
+  if ("device" in step) return `device ${describeCheck(step.device)}${opt}`;
   if ("run" in step) return `run ${step.run}`;
   if ("if_visible" in step) return `if visible "${step.if_visible}"`;
   return "allow risky";

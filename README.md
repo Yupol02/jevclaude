@@ -9,7 +9,7 @@
 
 **Mobile app testing for Claude Code that doesn't burn your tokens.** Android is verified on a real phone; iOS (simulator) is implemented but still experimental.
 
-Claude writes a test flow once. A local runner drives the device. [TypeSafe Jev](https://docs.typesafe.ai), a small structured-decision model, makes the per-step calls in about 200 ms each:
+Claude decides **what** to test and writes it down as a short plan file (`CihazdaTestEdilecek.md`, `.txt` or `.pdf`) in plain Turkish or English. JevClaude runs the whole plan on the phone in one call and sends back only the results. Steps and device states (is the flashlight on, did a call start, is an alarm set) are read by rules, without a model. [TypeSafe Jev](https://docs.typesafe.ai), a small structured-decision model, makes the remaining fuzzy calls in about 200 ms each:
 - which element to tap
 - whether the step passed
 - whether an error is showing
@@ -21,7 +21,7 @@ A replay cache makes re-runs model-free. Claude only hears back when something f
 
 
 ```
-Claude Code ──(MCP: run_flow / resume_flow)──▶ Runner ──▶ Driver
+Claude Code ──(MCP: run_plan · run_flow / resume_flow)──▶ Runner ──▶ Driver
      ▲                                           │          ├─ Android: adb + UiAutomator2 server
      │ short report, only on stop                │          └─ iOS: WebDriverAgent + simctl
      │                                           ├─ 1. deterministic: exact id/text, logcat/crash reports, text checks, spinners
@@ -66,7 +66,7 @@ Prerequisites: Node 20 or newer.
 
 ```bash
 npm install && npm run build
-node dist/cli.js init            # jevclaude.config.yaml, flows/smoke.yaml, .env
+node dist/cli.js init            # Claude Code skill, .mcp.json, jevclaude.config.yaml, .env
 # add TYPESAFE_API_KEY (or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN) to .env
 node dist/cli.js setup android   # optional: UiAutomator2 server → ~0.2 s screen reads + Unicode typing
 node dist/cli.js setup ios       # boots a simulator if needed, installs WebDriverAgent
@@ -76,38 +76,89 @@ node dist/cli.js run examples/flows/settings-smoke.yaml --html report.html
 
 ### Use it in your project
 
-1. In your app's repository, create the starter files:
+1. In your app's repository:
    ```bash
-   npx jevclaude init     # jevclaude.config.yaml, flows/smoke.yaml, .env
+   npx jevclaude init
    ```
-2. Put `TYPESAFE_API_KEY` and any test-account values (`TEST_EMAIL`, …) in `.env`. `init` creates it; keep it out of git.
+   This installs the Claude Code skill (`.claude/skills/device-test/SKILL.md`), registers the MCP server in `.mcp.json`, and creates `jevclaude.config.yaml` and `.env`. It doesn't touch the phone or add example tests.
+2. Put `TYPESAFE_API_KEY` and any test-account values (`TEST_EMAIL`, …) in `.env`. Keep it out of git.
 3. Connect a phone with USB debugging and run:
    ```bash
    npx jevclaude setup android && npx jevclaude doctor
    ```
-4. Connect Claude Code to it (next section). Ask Claude to test a feature; it writes the flow into `flows/` and runs it.
-5. Commit `flows/` and `.jevclaude/cache/`, so CI re-runs need no model calls for element picks. Run them on every PR with [examples/ci/github-actions-android.yml](examples/ci/github-actions-android.yml).
+4. Open Claude Code in the project and ask, for example: *"cihazda test et: asistana 'feneri aç' yazınca fener açılıyor mu?"*. Claude reads your code for the exact texts, writes `CihazdaTestEdilecek.md`, runs it with `run_plan`, and reports the results. It doesn't drive the phone itself.
+5. Keep plans you want to re-run (on every PR or release) in the repo, along with `.jevclaude/cache/`, so re-runs need no model calls for element picks. [examples/ci/github-actions-android.yml](examples/ci/github-actions-android.yml) runs tests in CI.
 
 This repository runs that setup on itself: [e2e-android.yml](.github/workflows/e2e-android.yml) boots an API 34 emulator on GitHub Actions, installs the UiAutomator2 server and runs [ci-emulator-settings.yaml](examples/flows/ci-emulator-settings.yaml). That flow uses exact selectors and two scrolls, needs no Jev key, and passes in about 22 s.
 
 ### Use from Claude Code
 
+`init` registers the server in `.mcp.json`. To add it by hand instead:
+
 ```bash
 claude mcp add jevclaude -- npx -y jevclaude mcp
 ```
-
-Then ask: *"test the login flow on my phone"*. The bundled skill (`.claude/skills/test-feature`) tells Claude to write one flow, call `run_flow` once, and read only the report.
 
 MCP tools:
 
 | Tool | What it does |
 |---|---|
+| `run_plan` | runs a plan file (`.md`, `.txt`, `.pdf`); one line per passing test, details for the rest |
 | `list_devices` | Android devices and booted iOS simulators |
 | `snapshot` | the current screen as compact text (cheaper than a screenshot) |
 | `run_flow` | runs a YAML flow; returns a short report and, if it stopped, a `run_id` |
 | `resume_flow` | `pass` / `retry` / `fail` for the stopped step, then continues without relaunching |
 
-## Flow example
+## Test plans
+
+A plan is a list of tests, each a `##` heading with numbered steps. Claude writes it; you can read and edit it too.
+
+```markdown
+uygulama: com.example.assistant
+
+## Fener komutu
+1. Uygulamayı aç
+2. "Yaz ya da konuş" alanına "feneri aç" yaz ve gönder
+3. Kontrol: fener açık
+4. Kontrol: asistan feneri açtığını söylüyor
+
+## Annemi ara
+izin: arama
+1. Uygulamayı aç
+2. "Yaz ya da konuş" alanına "annemi ara" yaz ve gönder
+3. Kontrol: arama başladı
+```
+
+```bash
+npx jevclaude plan CihazdaTestEdilecek.md --check   # how each line is read, no device needed
+npx jevclaude plan CihazdaTestEdilecek.md           # run it (MCP: run_plan)
+```
+
+| Line | Becomes |
+|---|---|
+| `Uygulamayı aç` / `Open the app` | restart the app (each test starts clean) |
+| `"Ayarlar"a dokun` / `Tap "Settings"` | tap: exact text first, then cache, then Jev |
+| `"Mesaj" alanına "merhaba" yaz ve gönder` / `Type "hi" into "Message" and send` | type (Unicode), optionally press Enter |
+| `Geri dön` · `Klavyeyi kapat` · `Aşağı kaydır` · `2 saniye bekle` · `"Tamam" görünene kadar bekle` · `Varsa "Daha sonra"ya dokun` · `Aramayı kapat` | the matching action |
+| `Kontrol: fener açık` · `arama başladı` · `alarm 07:00` · `müzik çalıyor` · `Wi-Fi kapalı` · `Bluetooth açık` · `bildirim "…"` | **device state**, read from the phone (`dumpsys` / `settings`), no model |
+| `Kontrol: "Kaydedildi" görünüyor` · `Kontrol: "Hata" görünmüyor` | exact screen text, no model |
+| `Kontrol: <any other sentence>` | Jev judges the screen (`expect`) |
+
+A line that matches no rule is an error with its line number, so a plan is never half-guessed. All tests run even if one fails.
+
+Checked on a Galaxy S22 Ultra with a real assistant app (not public), on 2026-11-25:
+- **"Turn the flashlight on, then off" by typed command:** passed in 16 s with 2 Jev calls (≈ $0.00006). The flashlight was read from the phone both times.
+- **"Call a contact":** passed in 18.6 s (≈ $0.00009).
+  - The app first asks "arayayım mı?" and switches to voice input, so the plan stops the voice input, waits for the text field and types "evet".
+  - The call was confirmed from the phone's call state and ended right away.
+  - Getting there took four runs, and each failure showed something real: the app's confirmation question, typing before the text field was back, a USB drop, and an end-call key ignored while dialing. The last one is now retried until the phone reports no call.
+
+**Phone calls are blocked by default.** If an action starts a call in a test without `izin: arama`, the call is ended at once and the step is reported as BLOCKED. With `izin: arama`, the call is ended right after `Kontrol: arama başladı` confirms it. A call still going when a test ends is always ended, but a call that was already going before the test is never touched. `izin: izinler` lets a test grant system permission dialogs.
+
+## YAML flows
+
+Plans compile to YAML flows. You can also write flows directly when you need control the plan format doesn't offer (sub-flows, `if_visible` with `else`, timeouts):
+
 
 ```yaml
 name: login happy path
@@ -132,6 +183,9 @@ The full syntax is in [docs/flow-reference.md](docs/flow-reference.md). Maestro 
 ## CLI
 
 ```bash
+jevclaude plan CihazdaTestEdilecek.md                       # run a test plan (.md / .txt / .pdf)
+jevclaude plan CihazdaTestEdilecek.md --only "Fener"        # only tests whose title contains "Fener"
+jevclaude plan CihazdaTestEdilecek.md --check               # show how the plan is read; no device
 jevclaude run flows/ --junit junit.xml --html report.html   # every *.yaml in flows/
 jevclaude run flows/ --devices R58M123,emulator-5554        # same flows on several devices, in parallel
 jevclaude run login.yaml --trace --record                   # screenshot every step + video
@@ -190,7 +244,7 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
 ## Status and limits
 
 - **What's verified:**
-  - 82 unit tests, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
+  - 142 unit tests, all run on recorded Android (uiautomator and UiAutomator2) and iOS (WebDriverAgent) screens.
   - The live Jev API is checked with `npm run jev:smoke`.
   - **Android, real device:** Samsung Galaxy S22 Ultra, Android 16, Turkish UI. Verified there:
     - both backends, the replay cache and `run_flow` → `resume_flow` over MCP
@@ -202,6 +256,9 @@ Screen text is untrusted. It is wrapped in `<<<SCREEN … SCREEN>>>` and every q
   - **A second phone:** Samsung Galaxy S23 FE, Android 16, Turkish UI. The same stock flows plus [chrome-web.yaml](examples/flows/chrome-web.yaml) pass there; see [Second phone](#second-phone-and-maestro-galaxy-s23-fe).
   - **An emulator in CI:** every push to `main` that touches `src/` runs [a Settings flow](examples/flows/ci-emulator-settings.yaml) on an API 34 emulator, without a Jev key.
 - **What's not verified yet:**
+  - **Test plans through Claude Code itself.** Plans ran on a real phone through the CLI, but the shipped skill + `run_plan` loop (Claude writes the plan and calls the tool) hasn't been tried end to end yet.
+  - **Some device checks on real hardware:** media and notification checks are covered by unit tests on assumed `dumpsys` formats only. The flashlight was checked on a Galaxy S22 only. Pressing end-call again while a call is still dialing is new and untested on a phone.
+  - **Device checks on iOS:** not supported.
   - iOS on a live simulator.
   - Permission dialogs on a device (covered by unit tests only).
   - See the [e2e checklist](CONTRIBUTING.md#end-to-end-checklist).

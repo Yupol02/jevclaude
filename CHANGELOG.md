@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-11-25
+
+Not yet verified: the skill + `run_plan` loop driven by Claude Code itself, media and notification checks on a real phone, and the end-call retry on a phone (see the README's status section).
+
+### Added
+- **Test plans:** Claude Code writes `CihazdaTestEdilecek.md` (or `.txt` / `.pdf`) in plain Turkish or English, and JevClaude runs it in one call (`run_plan` over MCP, `jevclaude plan` on the CLI).
+  - Each `## Title` is a test, and its numbered lines become steps by rules, without a model call.
+  - A line that matches no rule is reported with its line number.
+  - All tests run even if one fails. Passing tests take one line in the report; failing ones come with the step, the reason, the screen and a screenshot.
+  - `--check` shows how the plan will be read without touching a device.
+- **Device-state checks (`device:` step, `Kontrol: fener açık` in plans).** Android reads them from the phone: flashlight, phone call, next alarm, media playback, Wi-Fi, Bluetooth, airplane mode, posted notifications and the foreground app. Facts the screen doesn't show reliably can now be checked without a model.
+- **Phone-call guard (`calls: block | allow`).**
+  - Plans block calls unless a test says `izin: arama`.
+  - A blocked call is ended at once and the step is reported as blocked.
+  - An allowed call is ended right after the check confirms it.
+  - A call still going when a test ends is ended, but a call that was already going before the test is never touched.
+  - The end-call key is pressed again until the phone reports no call: a Galaxy S22 ignored it while the call was still dialing.
+  - Call checks wait 20 s, because an assistant may ask and dial first.
+  - Ending a call is noted in the report.
+- **The Claude Code skill ships with the package.** `jevclaude init` installs it as `.claude/skills/device-test/SKILL.md` and registers the MCP server in `.mcp.json`.
+
+### Changed
+- **`jevclaude init` no longer creates `flows/smoke.yaml`** and never touches a device. The repository's own `test-feature` skill is replaced by the shipped `device-test` skill.
+
 ## [0.4.1] — 2026-11-25
 
 ### Added

@@ -5,6 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { listDevices } from "../driver/select.js";
 import { parseFlow } from "../engine/flow.js";
+import { PLAN_HINT } from "../plan/parse.js";
+import { runPlanFile } from "../plan/run.js";
 import { loadDotEnv, RunSession, snapshotText } from "../session.js";
 
 const FLOW_FORMAT = `Flow format (YAML):
@@ -56,7 +58,7 @@ function gc() {
 
 export async function startMcpServer(): Promise<void> {
   loadDotEnv();
-  const server = new McpServer({ name: "jevclaude", version: "0.4.1" });
+  const server = new McpServer({ name: "jevclaude", version: "0.5.0" });
 
   server.registerTool("list_devices", { description: "List Android devices (adb) and booted iOS simulators." }, async () => {
     try {
@@ -110,6 +112,33 @@ export async function startMcpServer(): Promise<void> {
         if (result.resumable) sessions.set(session.id, { session, touched: Date.now() });
         else await session.close();
         return text(report);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "run_plan",
+    {
+      description: `Run a test plan file (Markdown, text or PDF, e.g. CihazdaTestEdilecek.md) on the device in one call. Each "## Title" section is a test; its numbered steps are read by rules (no model), and only fuzzy checks go to Jev. Device states (flashlight, phone call, alarm, media, Wi-Fi, Bluetooth, notification) are read from the device itself. All tests run even if one fails; you get one line per passing test and details (step, screen, screenshot) for the rest. Phone calls are ended at once unless the plan says "izin: arama"; then a call is ended right after the check confirms it.
+
+${PLAN_HINT}`,
+      inputSchema: {
+        plan_file: z.string().describe("Path to the plan file (.md, .txt or .pdf)"),
+        only: z.array(z.string()).optional().describe("Run only tests whose titles contain one of these strings"),
+        device: z.string().optional(),
+        trace: z.boolean().optional().describe("screenshot every step for the HTML report"),
+      },
+    },
+    async ({ plan_file, only, device, trace }) => {
+      try {
+        const out = await runPlanFile(plan_file, {
+          ...(only ? { only } : {}),
+          ...(device ? { device } : {}),
+          config: trace ? { trace: true } : {},
+        });
+        return text(out.text);
       } catch (e) {
         return fail(e);
       }

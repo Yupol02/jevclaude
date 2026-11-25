@@ -14,6 +14,7 @@ import {
   webContentHidden,
 } from "../core/uitree.js";
 import { hitsNativeUi } from "../core/web.js";
+import { checkKind, type DeviceCheck, describeCheck, matches } from "../device/state.js";
 import { type Driver, sleep } from "../driver/types.js";
 import type { JevAnswer, JevClient } from "../jev/client.js";
 import {
@@ -68,6 +69,10 @@ export interface RunnerConfig {
   launchTimeoutMs: number;
   /** Screenshot after every step (for HTML reports). */
   trace: boolean;
+  /** Default retry window for `device:` checks (a flashlight or call can take a moment to change). */
+  deviceTimeoutMs: number;
+  /** Window for `device: { call: … }`: an assistant may ask, answer and dial before the call starts. */
+  callTimeoutMs: number;
 }
 
 /** After a launch or URL open, the screen must hold still this long (see settle()). */
@@ -91,6 +96,8 @@ export const DEFAULT_CONFIG: RunnerConfig = {
   maxScrolls: 5,
   launchTimeoutMs: 10_000,
   trace: false,
+  deviceTimeoutMs: 8_000,
+  callTimeoutMs: 20_000,
 };
 
 export type StepStatus = "passed" | "failed" | "uncertain" | "blocked" | "skipped";
@@ -131,6 +138,8 @@ export interface RunResult {
   failureScreen?: string;
   crashes: string[];
   totalMs: number;
+  /** Things the runner did on its own that the reader should know (e.g. it ended a phone call). */
+  notes?: string[];
 }
 
 class Outcome {
@@ -168,6 +177,8 @@ export class Runner {
   /** `last` reflects the current screen (no action since it was taken). */
   private fresh = false;
   private t0 = 0;
+  /** A phone call was already going on when the flow started (then it's never ended by us). */
+  private callAtStart = false;
 
   constructor(
     private readonly driver: Driver,
@@ -199,7 +210,9 @@ export class Runner {
     this.queue = [...flow.steps];
     this.results = [];
     this.t0 = performance.now();
+    this.callAtStart = false;
     await Promise.all([this.driver.markLogs(), flow.fresh_start ? this.driver.stop(flow.app) : undefined]);
+    if (flow.calls) this.callAtStart = (await this.callState()) === "active";
     return this.loop();
   }
 
@@ -250,6 +263,16 @@ export class Runner {
 
   private async finish(): Promise<RunResult> {
     const flow = this.flow!;
+    const notes: string[] = [];
+    if (flow.calls && !this.callAtStart && (await this.callState()) === "active") {
+      this.log("a phone call started by this flow is still going on; ending it");
+      const ended = await this.endCallAndWait();
+      notes.push(
+        ended
+          ? "a phone call started during this test was still going on at the end and was ended"
+          : "a phone call started during this test is still going on: ending it failed, end it on the phone",
+      );
+    }
     const crashes = await this.driver.crashLogs(flow.app).catch(() => []);
     const stopped = this.queue.length > 0 ? this.results.at(-1) : undefined;
     let status: RunStatus = stopped ? (stopped.status as RunStatus) : "passed";
@@ -281,6 +304,7 @@ export class Runner {
       failureScreen,
       crashes,
       totalMs: Math.round(performance.now() - this.t0),
+      ...(notes.length ? { notes } : {}),
     };
   }
 
@@ -291,6 +315,7 @@ export class Runner {
     let out: Outcome;
     try {
       out = await this.runStep(step);
+      if (out.status === "passed") out = (await this.guardCalls(step)) ?? out;
     } catch (err) {
       out = new Outcome("failed", "none", `error: ${(err as Error).message}`);
     }
@@ -362,6 +387,10 @@ export class Runner {
     if ("wait_for" in step) return this.see(step.wait_for, true, step.timeout ?? this.config.waitForTimeoutMs);
     if ("not_see" in step) return this.see(step.not_see, false, step.timeout ?? this.config.assertTimeoutMs);
     if ("expect" in step) return this.expect(step.expect, step.timeout ?? this.config.assertTimeoutMs);
+    if ("device" in step) {
+      const window = "call" in step.device && step.device.call ? this.config.callTimeoutMs : this.config.deviceTimeoutMs;
+      return this.checkDevice(step.device, step.timeout ?? window);
+    }
     if ("if_visible" in step) {
       const snap = await this.snapshot();
       const visible = screenContains(snap, interpolate(step.if_visible, this.env));
@@ -371,6 +400,79 @@ export class Runner {
     if ("type" in step) return this.act("type", step.type.into, step.type, step.scroll);
     if ("run" in step) return new Outcome("failed", "none", "run: steps must be inlined when the flow is loaded");
     return new Outcome("failed", "none", "unknown step");
+  }
+
+  /**
+   * End the call and make sure it ended: while a call is still dialing, the end-call key can be
+   * ignored (seen on a Galaxy S22), so it is pressed again until the device reports no call.
+   */
+  private async endCallAndWait(): Promise<boolean> {
+    if (!this.driver.endCall) return false;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await this.driver.endCall().catch(() => {});
+      for (let i = 0; i < 5; i++) {
+        await sleep(300);
+        if ((await this.callState()) !== "active") return true;
+      }
+    }
+    return false;
+  }
+
+  private async callState(): Promise<string | undefined> {
+    if (!this.driver.readDeviceState) return undefined;
+    return (await this.driver.readDeviceState("call", "active").catch(() => undefined))?.value;
+  }
+
+  /**
+   * With `calls: block`, a call the app starts is ended at once and the step that caused it is
+   * blocked. Checked after every step, so a call started a moment after an action (e.g. once a
+   * voice assistant has answered) is still caught on the next step.
+   */
+  private async guardCalls(step: Step): Promise<Outcome | undefined> {
+    const flow = this.flow!;
+    if (flow.calls !== "block" || this.callAtStart) return undefined;
+    if (typeof step === "object" && ("allow_risky" in step || "device" in step)) return undefined;
+    if ((await this.callState()) !== "active") return undefined;
+    await this.endCallAndWait();
+    this.invalidate();
+    return new Outcome(
+      "blocked",
+      "deterministic",
+      "a phone call started and was ended at once: calls aren't allowed in this test (plan: `izin: arama` / flow: `calls: allow`)",
+    );
+  }
+
+  /** A device state (flashlight, call, alarm, …), re-read until it matches or the window ends. */
+  private async checkDevice(check: DeviceCheck, timeoutMs: number): Promise<Outcome> {
+    const read = this.driver.readDeviceState?.bind(this.driver);
+    if (!read) return new Outcome("failed", "none", `device checks aren't supported on ${this.driver.platform}`);
+    const { kind, want } = checkKind(check);
+    const deadline = performance.now() + timeoutMs;
+    let last = "unknown";
+    for (;;) {
+      const r = await read(kind, interpolate(want, this.env)).catch(() => undefined);
+      if (r) last = r.value;
+      if (r && matches(check, r)) {
+        // A call is only ever confirmed, never kept going: end it right after the check.
+        if (kind === "call" && want === "active" && !this.callAtStart) {
+          const ended = await this.endCallAndWait();
+          this.invalidate();
+          return new Outcome(
+            "passed",
+            "deterministic",
+            ended ? "call confirmed, then ended" : "call confirmed; ending it failed, end it on the phone",
+          );
+        }
+        return new Outcome("passed", "deterministic", `${kind}: ${r.value}`);
+      }
+      if (performance.now() > deadline) break;
+      await sleep(400);
+    }
+    return new Outcome(
+      "failed",
+      "deterministic",
+      last === "unknown" ? `couldn't read ${kind} on this device` : `expected ${describeCheck(check)}, device reports ${last}`,
+    );
   }
 
   private async swipe(dir: "up" | "down" | "left" | "right") {

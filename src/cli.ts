@@ -5,23 +5,27 @@ import { parseArgs } from "node:util";
 import YAML from "yaml";
 import { listDevices } from "./driver/select.js";
 import type { Platform } from "./driver/types.js";
-import { type Flow, loadFlowFile, parseFlow } from "./engine/flow.js";
+import { describeStep, type Flow, loadFlowFile, parseFlow } from "./engine/flow.js";
 import type { RunResult } from "./engine/runner.js";
 import { exportMaestro, importMaestro } from "./maestro/convert.js";
+import { parsePlan } from "./plan/parse.js";
+import { readPlanText, runPlanFile } from "./plan/run.js";
 import type { Usage } from "./report/text.js";
 import { loadDotEnv, runFlow, snapshotText, writeCombinedHtml, writeJUnit } from "./session.js";
 import { doctor, init, setupAndroid, setupIos } from "./setup.js";
 
-const VERSION = "0.4.1";
+const VERSION = "0.5.0";
 
 const HELP = `jevclaude ${VERSION} — mobile app testing: Claude plans, Jev decides, the device runner executes.
 
 Usage:
+  jevclaude plan <plan.md|.txt|.pdf> [--only "Title"] [--device ID]
+                                               Run a test plan (e.g. CihazdaTestEdilecek.md)
   jevclaude run <flow.yaml|dir>... [options]   Run flows (directories: every *.yaml inside)
   jevclaude snapshot [--platform P] [--device ID]   Print the current screen as compact text
   jevclaude devices                            List Android devices and booted iOS simulators
   jevclaude doctor                             Check tools, devices, device servers and the Jev key
-  jevclaude init                               Create jevclaude.config.yaml, flows/ and .env
+  jevclaude init                               Install the Claude Code skill, create jevclaude.config.yaml and .env
   jevclaude setup android|ios [--device ID]    Install UiAutomator2 server / WebDriverAgent
   jevclaude import-maestro <in.yaml> [-o out]  Convert a Maestro flow to a jevclaude flow
   jevclaude export-maestro <in.yaml> [-o out]  Convert a jevclaude flow to Maestro YAML
@@ -132,6 +136,38 @@ async function cmdRun(argv: string[]): Promise<number> {
   return passed === runs.length ? 0 : 1;
 }
 
+async function cmdPlan(argv: string[]): Promise<number> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      only: { type: "string", multiple: true },
+      device: { type: "string" },
+      trace: { type: "boolean" },
+      check: { type: "boolean" },
+    },
+  });
+  const file = positionals[0];
+  if (!file) throw new Error("plan needs a plan file (.md, .txt or .pdf)");
+  if (values.check) {
+    // Parse only: show the steps each test turns into, without touching a device.
+    const plan = parsePlan(await readPlanText(file));
+    for (const t of plan.tests) {
+      console.log(`## ${t.title}  (calls: ${t.flow.calls}, permission dialogs: ${t.flow.permissions})`);
+      for (const step of t.flow.steps) console.log(`  - ${describeStep(step)}`);
+    }
+    return 0;
+  }
+  const out = await runPlanFile(file, {
+    ...(values.only ? { only: values.only } : {}),
+    ...(values.device ? { device: values.device } : {}),
+    config: values.trace ? { trace: true } : {},
+    log: (m) => console.error(m),
+  });
+  console.log(`\n${out.text}`);
+  return out.results.every((r) => r.status === "passed") ? 0 : 1;
+}
+
 function convertCmd(argv: string[], dir: "import" | "export"): number {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { o: { type: "string", short: "o" } } });
   const input = positionals[0];
@@ -166,6 +202,8 @@ async function main(argv: string[]): Promise<number> {
   switch (cmd) {
     case "run":
       return cmdRun(args);
+    case "plan":
+      return cmdPlan(args);
     case "devices": {
       const list = await listDevices();
       console.log(list.length ? list.map((d) => `${d.platform}\t${d.id}\t${d.label}`).join("\n") : "no devices");

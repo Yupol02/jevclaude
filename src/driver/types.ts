@@ -1,4 +1,5 @@
 import type { UiElement, UiSnapshot } from "../core/uitree.js";
+import type { DeviceCheckKind, DeviceReading } from "../device/state.js";
 
 export type Platform = "android" | "ios";
 
@@ -45,6 +46,14 @@ export interface Driver {
   startRecording?(): Promise<void>;
   /** Stops a recording and saves it to `path`; returns the path or undefined if nothing was recorded. */
   stopRecording?(path: string): Promise<string | undefined>;
+
+  /**
+   * Read a device state for a `device:` check (flashlight, call, alarm, …). Undefined when the
+   * driver can't tell. `want` is passed for checks that search (notification text).
+   */
+  readDeviceState?(kind: DeviceCheckKind, want: string): Promise<DeviceReading | undefined>;
+  /** End an ongoing phone call. */
+  endCall?(): Promise<void>;
 
   close?(): Promise<void>;
 }

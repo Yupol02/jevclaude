@@ -1,6 +1,16 @@
 import type { ChildProcess } from "node:child_process";
 import type { UiElement, UiSnapshot } from "../../core/uitree.js";
 import { findWebContainer, mergeWebPage, urlHint } from "../../core/web.js";
+import {
+  type DeviceCheckKind,
+  type DeviceReading,
+  notificationContains,
+  parseCallState,
+  parseMediaPlaying,
+  parseNextAlarm,
+  parseOnOff,
+  parseTorch,
+} from "../../device/state.js";
 import { type Driver, sleep } from "../types.js";
 import { Adb, findCrashes } from "./adb.js";
 import { CdpClient } from "./cdp.js";
@@ -292,6 +302,40 @@ export class AndroidDriver implements Driver {
     this.recorder = undefined;
     await this.adb.pull("/sdcard/jevclaude.mp4", path);
     return path;
+  }
+
+  async readDeviceState(kind: DeviceCheckKind, want: string): Promise<DeviceReading | undefined> {
+    const sh = (cmd: string[]) => this.adb.shell(cmd, 10_000);
+    switch (kind) {
+      case "torch": {
+        const v = parseTorch(await sh(["dumpsys", "media.camera"]));
+        return v ? { value: v } : undefined;
+      }
+      case "call": {
+        const v = parseCallState(await sh(["dumpsys", "telephony.registry"]));
+        return v ? { value: v } : undefined;
+      }
+      case "alarm":
+        return { value: parseNextAlarm(await sh(["dumpsys", "alarm"])) };
+      case "media":
+        return { value: parseMediaPlaying(await sh(["dumpsys", "media_session"])) };
+      case "wifi":
+        return { value: parseOnOff(await sh(["settings", "get", "global", "wifi_on"])) };
+      case "bluetooth":
+        return { value: parseOnOff(await sh(["settings", "get", "global", "bluetooth_on"])) };
+      case "airplane":
+        return { value: parseOnOff(await sh(["settings", "get", "global", "airplane_mode_on"])) };
+      case "notification": {
+        const found = notificationContains(await sh(["dumpsys", "notification", "--noredact"]), want);
+        return { value: found ? "shown" : "not shown", found };
+      }
+      case "app":
+        return { value: (await this.foregroundApp()) ?? "unknown" };
+    }
+  }
+
+  async endCall() {
+    await this.adb.key("KEYCODE_ENDCALL");
   }
 
   async close() {
